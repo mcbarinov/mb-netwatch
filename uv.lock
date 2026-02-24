@@ -359,14 +359,13 @@ wheels = [
 
 [[package]]
 name = "mb-netwatch"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
+    { name = "mm-clikit" },
     { name = "mm-pymac" },
     { name = "psutil" },
-    { name = "pydantic" },
-    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -383,10 +382,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "~=3.11" },
+    { name = "mm-clikit", specifier = "~=0.0.8" },
     { name = "mm-pymac", specifier = "~=0.0.1" },
     { name = "psutil", specifier = "~=7.0" },
-    { name = "pydantic", specifier = "~=2.12" },
-    { name = "typer", specifier = "~=0.24.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -410,6 +408,23 @@ wheels = [
 ]
 
 [[package]]
+name = "mm-clikit"
+version = "0.0.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mm-result" },
+    { name = "mm-std" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "tomlkit" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/30/5527aff8cfebfd8adcfa538134518a47a2d54c90df5e5f4bb8726d34e603/mm_clikit-0.0.8.tar.gz", hash = "sha256:fe3a14b04d0cb1d51092f48241e48b9899a1e3fb9b21ac7e3bc64a5d4d494453", size = 49905, upload-time = "2026-02-24T11:48:30.382Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/cd/a4836db6dca2a1f79453f8cd39870502dbbe445d62a4f51023e83556373e/mm_clikit-0.0.8-py3-none-any.whl", hash = "sha256:cb0a6ed88ec62837439964e0c448cd76d5efcbac6e431d87fa926fc541e7b610", size = 8008, upload-time = "2026-02-24T11:48:31.314Z" },
+]
+
+[[package]]
 name = "mm-pymac"
 version = "0.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -419,6 +434,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2c/97/68a2e4c38ef5541548a7c9d358da36579fac58b2559d3692c3c7663733f7/mm_pymac-0.0.1.tar.gz", hash = "sha256:4aac2fe2cae1fe7cc124a75c1b1c47e846a5704d0fbe08314047e0bed2bea081", size = 32805, upload-time = "2026-02-20T11:46:18.814Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/63/df/57765bb894b6eac9f68388a1b3b3999208bebbcf38979cd6a3a5b710ebea/mm_pymac-0.0.1-py3-none-any.whl", hash = "sha256:ee9e8cafa9a67ad0df791ab01f2a309a76d6a6d6349d7ae19e29fa026ed077d1", size = 6953, upload-time = "2026-02-20T11:46:17.304Z" },
+]
+
+[[package]]
+name = "mm-result"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/04/08740b05a9715cf41400d4e024d7c81c42900a31fe44c006c78b31001346/mm_result-0.2.0.tar.gz", hash = "sha256:68e6423b404a9f96481fda42d155b93a047c4c0e61578d355c29228ed018b4c3", size = 42576, upload-time = "2026-01-23T14:11:47.939Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/07/2edaf6120e5ed2e8bb6fff86d93247274bb698401bca9e9a8f4bac54f9fa/mm_result-0.2.0-py3-none-any.whl", hash = "sha256:37a2200827e0399c230be894f009695969233b2eb217cf8fdbcfc39edb1dcb1a", size = 5495, upload-time = "2026-01-23T14:11:48.795Z" },
+]
+
+[[package]]
+name = "mm-std"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/9c/7ff712ef4b57e59416f95583cb3ae13e2ed40c9768fc34b89d4023ff2cc4/mm_std-0.7.1.tar.gz", hash = "sha256:7fa306e103eff001bb45ec51ca5aa7a31f269c4690fe6cd94e1b5fb252e0a032", size = 38077, upload-time = "2026-02-03T08:41:28.736Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/86/d3d6653925530af1d83bd8776f51f4f40fed6b2b4c8ca0ae80c09d5bb32e/mm_std-0.7.1-py3-none-any.whl", hash = "sha256:1900c3520f27513d746ed53787391a1a001c68a60f7436c356e5746892a8cad4", size = 8542, upload-time = "2026-02-03T08:41:27.524Z" },
 ]
 
 [[package]]
@@ -862,15 +895,15 @@ wheels = [
 
 [[package]]
 name = "rich"
-version = "14.3.2"
+version = "14.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/99/a4cab2acbb884f80e558b0771e97e21e939c5dfb460f488d19df485e8298/rich-14.3.2.tar.gz", hash = "sha256:e712f11c1a562a11843306f5ed999475f09ac31ffb64281f73ab29ffdda8b3b8", size = 230143, upload-time = "2026-02-01T16:20:47.908Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/c6/f3b320c27991c46f43ee9d856302c70dc2d0fb2dba4842ff739d5f46b393/rich-14.3.3.tar.gz", hash = "sha256:b8daa0b9e4eef54dd8cf7c86c03713f53241884e814f4e2f5fb342fe520f639b", size = 230582, upload-time = "2026-02-19T17:23:12.474Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/45/615f5babd880b4bd7d405cc0dc348234c5ffb6ed1ea33e152ede08b2072d/rich-14.3.2-py3-none-any.whl", hash = "sha256:08e67c3e90884651da3239ea668222d19bea7b589149d8014a21c633420dbb69", size = 309963, upload-time = "2026-02-01T16:20:46.078Z" },
+    { url = "https://files.pythonhosted.org/packages/14/25/b208c5683343959b670dc001595f2f3737e051da617f66c31f7c4fa93abc/rich-14.3.3-py3-none-any.whl", hash = "sha256:793431c1f8619afa7d3b52b2cdec859562b950ea0d4b6b505397612db8d5362d", size = 310458, upload-time = "2026-02-19T17:23:13.732Z" },
 ]
 
 [[package]]
@@ -962,8 +995,17 @@ wheels = [
 ]
 
 [[package]]
+name = "tomlkit"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz", hash = "sha256:cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064", size = 187167, upload-time = "2026-01-13T01:14:53.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/11/87d6d29fb5d237229d67973a6c9e06e048f01cf4994dee194ab0ea841814/tomlkit-0.14.0-py3-none-any.whl", hash = "sha256:592064ed85b40fa213469f81ac584f67a4f2992509a7c3ea2d632208623a3680", size = 39310, upload-time = "2026-01-13T01:14:51.965Z" },
+]
+
+[[package]]
 name = "typer"
-version = "0.24.0"
+version = "0.24.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -971,9 +1013,9 @@ dependencies = [
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/b6/3e681d3b6bb22647509bdbfdd18055d5adc0dce5c5585359fa46ff805fdc/typer-0.24.0.tar.gz", hash = "sha256:f9373dc4eff901350694f519f783c29b6d7a110fc0dcc11b1d7e353b85ca6504", size = 118380, upload-time = "2026-02-16T22:08:48.496Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/24/cb09efec5cc954f7f9b930bf8279447d24618bb6758d4f6adf2574c41780/typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45", size = 118613, upload-time = "2026-02-21T16:54:40.609Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/d0/4da85c2a45054bb661993c93524138ace4956cb075a7ae0c9d1deadc331b/typer-0.24.0-py3-none-any.whl", hash = "sha256:5fc435a9c8356f6160ed6e85a6301fdd6e3d8b2851da502050d1f92c5e9eddc8", size = 56441, upload-time = "2026-02-16T22:08:47.535Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/91/48db081e7a63bb37284f9fbcefda7c44c277b18b0e13fbc36ea2335b71e6/typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e", size = 56085, upload-time = "2026-02-21T16:54:41.616Z" },
 ]
 
 [[package]]

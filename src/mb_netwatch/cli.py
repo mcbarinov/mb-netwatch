@@ -4,6 +4,7 @@ from importlib.metadata import version
 from typing import Annotated
 
 import typer
+from mm_clikit import TyperPlus
 
 from mb_netwatch.app_context import AppContext
 from mb_netwatch.commands.probe import probe
@@ -16,21 +17,13 @@ from mb_netwatch.config import Config
 from mb_netwatch.db import Db
 from mb_netwatch.output import Output
 
-app = typer.Typer(add_completion=False, no_args_is_help=True)
-
-
-def _version_callback(value: bool) -> None:
-    """Print version and exit."""
-    if value:
-        typer.echo(version("mb-netwatch"))
-        raise typer.Exit
+app = TyperPlus(package_name="mb-netwatch")
 
 
 @app.callback()
 def main(
     ctx: typer.Context,
     *,
-    version: Annotated[bool | None, typer.Option("--version", callback=_version_callback, is_eager=True)] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """Internet connection monitor for macOS."""
@@ -42,9 +35,9 @@ def main(
     ctx.obj = AppContext(out=Output(json_mode=json_output), db=db, cfg=cfg)
 
 
-app.command()(probe)
+app.command(aliases=["p"])(probe)
 app.command()(probed)
 app.command()(start)
 app.command()(stop)
 app.command()(tray)
-app.command()(watch)
+app.command(aliases=["w"])(watch)

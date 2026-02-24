@@ -1,6 +1,6 @@
 [project]
 name = "mb-netwatch"
-version = "0.0.1"
+version = "0.0.2"
 description = "macOS internet connection monitor"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 requires-python = ">=3.14"
-dependencies = ["typer~=0.24.0", "aiohttp~=3.11", "psutil~=7.0", "mm-pymac~=0.0.1", "pydantic~=2.12"]
+dependencies = ["aiohttp~=3.11", "psutil~=7.0", "mm-pymac~=0.0.1", "mm-clikit~=0.0.8"]
 
 [project.urls]
 Homepage = "https://github.com/mcbarinov/mb-netwatch"

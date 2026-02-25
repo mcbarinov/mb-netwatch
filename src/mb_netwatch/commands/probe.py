@@ -4,7 +4,7 @@ import asyncio
 
 import typer
 
-from mb_netwatch.app_context import use_context
+from mb_netwatch.app_context import AppContext, use_context
 from mb_netwatch.output import ProbeResult
 from mb_netwatch.probes.ip import check_ip
 from mb_netwatch.probes.latency import check_latency
@@ -16,11 +16,16 @@ app = typer.Typer()
 @app.command()
 def probe(ctx: typer.Context) -> None:
     """Run a one-shot connectivity probe and print result."""
-    app = use_context(ctx)
+    asyncio.run(_probe(use_context(ctx)))
 
-    latency = asyncio.run(check_latency(http_timeout=app.cfg.probed.latency_timeout))
-    vpn = check_vpn()
-    ip_result = asyncio.run(check_ip(http_timeout=app.cfg.probed.ip_timeout))
+
+async def _probe(app: AppContext) -> None:
+    """Run all checks concurrently and print result."""
+    latency, vpn, ip_result = await asyncio.gather(
+        check_latency(http_timeout=app.cfg.probed.latency_timeout),
+        asyncio.to_thread(check_vpn),
+        check_ip(http_timeout=app.cfg.probed.ip_timeout),
+    )
 
     result = ProbeResult(
         latency_ms=latency.latency_ms,

@@ -1,10 +1,13 @@
 """Internet latency measurement via HTTP/HTTPS endpoints."""
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 
 import aiohttp
+
+log = logging.getLogger(__name__)
 
 _LATENCY_PROBE_URLS: list[str] = [
     "https://connectivitycheck.gstatic.com/generate_204",
@@ -29,9 +32,13 @@ async def _measure(session: aiohttp.ClientSession, url: str) -> tuple[float, str
     try:
         async with session.get(url) as resp:
             await resp.read()
-        return round((time.monotonic() - start) * 1000, 3), url
-    except aiohttp.ClientError, TimeoutError:
+    except (aiohttp.ClientError, TimeoutError) as exc:
+        log.debug("latency: %s failed: %s", url, exc)
         return None
+    else:
+        elapsed = round((time.monotonic() - start) * 1000, 3)
+        log.debug("latency: %s responded in %.0fms", url, elapsed)
+        return elapsed, url
 
 
 async def check_latency(session: aiohttp.ClientSession | None = None, *, http_timeout: float = 5.0) -> LatencyResult:
@@ -58,7 +65,9 @@ async def _check_latency(session: aiohttp.ClientSession) -> LatencyResult:
                 result = task.result()
                 if result is not None:
                     latency_ms, url = result
+                    log.debug("latency: winner %s at %.0fms, cancelling %d remaining", url, latency_ms, len(pending))
                     return LatencyResult(latency_ms=latency_ms, winner_endpoint=url)
+        log.debug("latency: all %d endpoints failed", len(_LATENCY_PROBE_URLS))
         return LatencyResult(latency_ms=None, winner_endpoint=None)
     finally:
         for task in pending:

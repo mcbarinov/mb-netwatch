@@ -1,10 +1,12 @@
 """One-shot connectivity probe."""
 
 import asyncio
+from typing import Annotated
 
 import typer
 
 from mb_netwatch.app_context import AppContext, use_context
+from mb_netwatch.logger import setup_logging
 from mb_netwatch.output import ProbeResult
 from mb_netwatch.probes.ip import check_ip
 from mb_netwatch.probes.latency import check_latency
@@ -14,8 +16,14 @@ app = typer.Typer()
 
 
 @app.command()
-def probe(ctx: typer.Context) -> None:
+def probe(
+    ctx: typer.Context,
+    *,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show diagnostic details on stderr.")] = False,
+) -> None:
     """Run a one-shot connectivity probe and print result."""
+    if verbose:
+        setup_logging(debug=True)
     asyncio.run(_probe(use_context(ctx)))
 
 

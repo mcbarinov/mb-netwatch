@@ -1,11 +1,14 @@
 """VPN detection via network interfaces, routing table, and scutil."""
 
+import logging
 import re
 import socket
 import subprocess  # nosec B404
 from dataclasses import dataclass
 
 import psutil
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +29,9 @@ def detect_tunnel_interface() -> tuple[str, str] | None:
         if name.startswith(("tun", "utun")):
             for addr in addrs:
                 if addr.family == socket.AF_INET and addr.address:
+                    log.debug("vpn: found tunnel interface %s with IP %s", name, addr.address)
                     return name, addr.address
+    log.debug("vpn: no tunnel interface found")
     return None
 
 
@@ -39,7 +44,8 @@ def detect_tunnel_mode(vpn_interface: str) -> str:
     """
     try:
         output = subprocess.check_output(["netstat", "-rn", "-f", "inet"], text=True, timeout=5)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
-    except subprocess.SubprocessError, OSError:
+    except (subprocess.SubprocessError, OSError) as exc:
+        log.debug("vpn: netstat failed: %s", exc)
         return "unknown"
 
     has_0_1 = False
@@ -77,7 +83,8 @@ def detect_provider() -> str | None:
     """
     try:
         output = subprocess.check_output(["scutil", "--nc", "list"], text=True, timeout=5)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
-    except subprocess.SubprocessError, OSError:
+    except (subprocess.SubprocessError, OSError) as exc:
+        log.debug("vpn: scutil failed: %s", exc)
         return None
 
     for line in output.splitlines():

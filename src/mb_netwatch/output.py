@@ -1,14 +1,9 @@
 """Structured output for CLI and JSON modes."""
 
-# ruff: noqa: T201 — this module is the output layer; print() is its sole mechanism for producing CLI output.
-
-import json
-import sys
 from dataclasses import asdict, dataclass
-from typing import NoReturn
 from urllib.parse import urlparse
 
-import typer
+from mm_clikit import DualModeOutput
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,76 +40,44 @@ class StartStopResult:
     message: str
 
 
-class Output:
+class Output(DualModeOutput):
     """Handles all CLI output in JSON or human-readable format."""
-
-    def __init__(self, *, json_mode: bool) -> None:
-        """Initialize output handler.
-
-        Args:
-            json_mode: If True, output JSON envelopes; otherwise human-readable text.
-
-        """
-        self._json_mode = json_mode
-
-    @property
-    def json_mode(self) -> bool:
-        """Whether JSON output is enabled."""
-        return self._json_mode
-
-    def _success(self, data: dict[str, object], message: str) -> None:
-        """Print a success result in JSON or human-readable format."""
-        if self._json_mode:
-            print(json.dumps({"ok": True, "data": data}))
-        else:
-            print(message)
-
-    def print_error_and_exit(self, code: str, message: str) -> NoReturn:
-        """Print an error in JSON or human-readable format and exit with code 1."""
-        if self._json_mode:
-            print(json.dumps({"ok": False, "error": code, "message": message}))
-        else:
-            print(f"Error: {message}", file=sys.stderr)
-        raise typer.Exit(code=1)
 
     def print_probe(self, result: ProbeResult) -> None:
         """Print one-shot probe result."""
-        if self._json_mode:
-            print(json.dumps({"ok": True, "data": asdict(result)}))
-            return
+        lines: list[str] = []
 
         # Latency
         if result.latency_ms is None:
-            print("Latency: down")
+            lines.append("Latency: down")
         else:
             host = urlparse(result.winner_endpoint).hostname if result.winner_endpoint else "?"
-            print(f"Latency: {result.latency_ms:.0f}ms ({host})")
+            lines.append(f"Latency: {result.latency_ms:.0f}ms ({host})")
 
         # VPN
         if not result.vpn_active:
-            print("VPN: inactive")
+            lines.append("VPN: inactive")
         else:
             parts = ["VPN: active"]
             if result.vpn_provider:
                 parts.append(f"({result.vpn_provider})")
             parts.append(f"[{result.tunnel_mode} tunnel]")
-            print(" ".join(parts))
+            lines.append(" ".join(parts))
 
         # IP
         if result.ip is None:
-            print("IP: unknown")
+            lines.append("IP: unknown")
         elif result.country_code:
-            print(f"IP: {result.ip} ({result.country_code})")
+            lines.append(f"IP: {result.ip} ({result.country_code})")
         else:
-            print(f"IP: {result.ip}")
+            lines.append(f"IP: {result.ip}")
+
+        self.print(asdict(result), "\n".join(lines))
 
     def print_watch_row(self, row: WatchRow, formatted_line: str) -> None:
         """Print a single watch row in JSON or human-readable format."""
-        if self._json_mode:
-            print(json.dumps(asdict(row)))
-        else:
-            print(formatted_line)
+        self.print(asdict(row), formatted_line)
 
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""
-        self._success(asdict(result), result.message)
+        self.print(asdict(result), result.message)

@@ -72,12 +72,12 @@ class Output(DualModeOutput):
         else:
             lines.append(f"IP: {result.ip}")
 
-        self.print(asdict(result), "\n".join(lines))
+        self.output(json_data=asdict(result), display_data="\n".join(lines))
 
     def print_watch_row(self, row: WatchRow, formatted_line: str) -> None:
         """Print a single watch row in JSON or human-readable format."""
-        self.print(asdict(row), formatted_line)
+        self.output(json_data=asdict(row), display_data=formatted_line)
 
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""
-        self.print(asdict(result), result.message)
+        self.output(json_data=asdict(result), display_data=result.message)

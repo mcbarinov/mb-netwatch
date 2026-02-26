@@ -1,65 +1,48 @@
 """Stop probed/tray processes."""
 
-import os
-import signal
-import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
+from mm_clikit import is_process_running, read_pid_file, stop_process
 
 from mb_netwatch.app_context import AppContext, use_context
 from mb_netwatch.output import StartStopResult
-from mb_netwatch.process import Component, is_alive, pid_path, read_pid
 
-_POLL_INTERVAL = 0.2
 _STOP_TIMEOUT = 5.0
 
-_BOTH = [Component.PROBED, Component.TRAY]
 
-
-def _stop_component(component: Component, app: AppContext) -> bool:
+def _stop_component(component: str, app: AppContext) -> bool:
     """Stop a single component by sending SIGTERM and waiting for exit."""
-    path = pid_path(component, app.cfg.data_dir)
-    if not is_alive(path):
-        app.out.print_start_stop(StartStopResult(component=component.value, message=f"{component.value}: not running"))
+    path = app.cfg.data_dir / f"{component}.pid"
+    if not is_process_running(path, remove_stale=True, skip_self=True):
+        app.out.print_start_stop(StartStopResult(component=component, message=f"{component}: not running"))
         return True
 
-    pid = read_pid(path)
+    pid = read_pid_file(path)
     if pid is None:
-        app.out.print_start_stop(StartStopResult(component=component.value, message=f"{component.value}: not running"))
+        app.out.print_start_stop(StartStopResult(component=component, message=f"{component}: not running"))
         return True
 
-    os.kill(pid, signal.SIGTERM)
-
-    # Poll until process exits or timeout
-    deadline = time.monotonic() + _STOP_TIMEOUT
-    while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            path.unlink(missing_ok=True)
-            app.out.print_start_stop(StartStopResult(component=component.value, message=f"{component.value}: stopped"))
-            return True
-        except PermissionError:
-            break
-        time.sleep(_POLL_INTERVAL)
-
-    app.out.print_start_stop(
-        StartStopResult(
-            component=component.value,
-            message=f"{component.value}: failed to stop within {_STOP_TIMEOUT:.1f}s (pid {pid} still running)",
+    stopped = stop_process(pid, timeout=_STOP_TIMEOUT, force_kill=False)
+    if stopped:
+        path.unlink(missing_ok=True)
+        app.out.print_start_stop(StartStopResult(component=component, message=f"{component}: stopped"))
+    else:
+        app.out.print_start_stop(
+            StartStopResult(
+                component=component,
+                message=f"{component}: failed to stop within {_STOP_TIMEOUT:.1f}s (pid {pid} still running)",
+            )
         )
-    )
-    return False
+    return stopped
 
 
-def stop(ctx: typer.Context, component: Annotated[Component | None, typer.Argument()] = None) -> None:
+def stop(ctx: typer.Context, component: Annotated[Literal["probed", "tray"] | None, typer.Argument()] = None) -> None:
     """Stop probed and/or tray."""
     app = use_context(ctx)
-    targets: list[Component] = [Component(component)] if component else _BOTH
     all_stopped = True
-    for target in targets:
-        if not _stop_component(target, app):
+    for name in (component,) if component else ("probed", "tray"):
+        if not _stop_component(name, app):
             all_stopped = False
     if not all_stopped:
         raise typer.Exit(1)

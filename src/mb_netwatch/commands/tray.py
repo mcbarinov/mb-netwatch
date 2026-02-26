@@ -3,13 +3,13 @@
 import time
 
 import typer
+from mm_clikit import is_process_running, write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.app_context import use_context
 from mb_netwatch.config import Config
 from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
 from mb_netwatch.logger import setup_logging
-from mb_netwatch.process import is_alive, write_pid_file
 
 
 class _NetwatchTray:
@@ -116,7 +116,7 @@ class _NetwatchTray:
 def tray(ctx: typer.Context) -> None:
     """Run menu bar UI process that displays current status."""
     app = use_context(ctx)
-    if is_alive(app.cfg.tray_pid_path):
+    if is_process_running(app.cfg.tray_pid_path, remove_stale=True, skip_self=True):
         typer.echo("tray: already running")
         raise typer.Exit(1)
 

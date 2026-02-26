@@ -9,13 +9,13 @@ from typing import Annotated
 
 import aiohttp
 import typer
+from mm_clikit import is_process_running, write_pid_file
 
 from mb_netwatch.app_context import AppContext, use_context
 from mb_netwatch.logger import setup_logging
 from mb_netwatch.probes.ip import IpResult, check_ip
 from mb_netwatch.probes.latency import check_latency
 from mb_netwatch.probes.vpn import check_vpn
-from mb_netwatch.process import is_alive, write_pid_file
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ async def _run(app: AppContext) -> None:
 def probed(ctx: typer.Context, *, debug: Annotated[bool, typer.Option(help="Enable debug logging.")] = False) -> None:
     """Run continuous background measurements every 2 seconds."""
     app = use_context(ctx)
-    if is_alive(app.cfg.probed_pid_path):
+    if is_process_running(app.cfg.probed_pid_path, remove_stale=True, skip_self=True):
         typer.echo("probed: already running")
         raise typer.Exit(1)
 

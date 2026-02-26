@@ -103,7 +103,7 @@ wheels = [
 
 [[package]]
 name = "bandit"
-version = "1.9.3"
+version = "1.9.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -111,9 +111,9 @@ dependencies = [
     { name = "rich" },
     { name = "stevedore" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/76/a7f3e639b78601118aaa4a394db2c66ae2597fbd8c39644c32874ed11e0c/bandit-1.9.3.tar.gz", hash = "sha256:ade4b9b7786f89ef6fc7344a52b34558caec5da74cb90373aed01de88472f774", size = 4242154, upload-time = "2026-01-19T04:05:22.802Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/c3/0cb80dfe0f3076e5da7e4c5ad8e57bac6ac357ff4a6406205501cade4965/bandit-1.9.4.tar.gz", hash = "sha256:b589e5de2afe70bd4d53fa0c1da6199f4085af666fde00e8a034f152a52cd628", size = 4242677, upload-time = "2026-02-25T06:44:15.503Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/0b/8bdc52111c83e2dc2f97403dc87c0830b8989d9ae45732b34b686326fb2c/bandit-1.9.3-py3-none-any.whl", hash = "sha256:4745917c88d2246def79748bde5e08b9d5e9b92f877863d43fab70cd8814ce6a", size = 134451, upload-time = "2026-01-19T04:05:20.938Z" },
+    { url = "https://files.pythonhosted.org/packages/05/a4/a26d5b25671d27e03afb5401a0be5899d94ff8fab6a698b1ac5be3ec29ef/bandit-1.9.4-py3-none-any.whl", hash = "sha256:f89ffa663767f5a0585ea075f01020207e966a9c0f2b9ef56a57c7963a3f6f8e", size = 134741, upload-time = "2026-02-25T06:44:13.694Z" },
 ]
 
 [[package]]
@@ -382,14 +382,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "~=3.11" },
-    { name = "mm-clikit", specifier = "~=0.0.8" },
+    { name = "mm-clikit", specifier = "~=0.0.9" },
     { name = "mm-pymac", specifier = "~=0.0.1" },
     { name = "psutil", specifier = "~=7.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bandit", specifier = "~=1.9.3" },
+    { name = "bandit", specifier = "~=1.9.4" },
     { name = "mypy", specifier = "~=1.19.1" },
     { name = "pip-audit", specifier = "~=2.10.0" },
     { name = "pytest", specifier = "~=9.0.2" },
@@ -409,7 +409,7 @@ wheels = [
 
 [[package]]
 name = "mm-clikit"
-version = "0.0.8"
+version = "0.0.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mm-result" },
@@ -419,9 +419,9 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/82/30/5527aff8cfebfd8adcfa538134518a47a2d54c90df5e5f4bb8726d34e603/mm_clikit-0.0.8.tar.gz", hash = "sha256:fe3a14b04d0cb1d51092f48241e48b9899a1e3fb9b21ac7e3bc64a5d4d494453", size = 49905, upload-time = "2026-02-24T11:48:30.382Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/a5/f57999303b76cedb5f85a1e8b1b0b21f736309b8d9b670aa8a35bf797c39/mm_clikit-0.0.9.tar.gz", hash = "sha256:34c6383785e2ddf6a0aac8586583908f617b0c1215899e51df19c8b22c974a2b", size = 54848, upload-time = "2026-02-26T06:06:18.776Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/cd/a4836db6dca2a1f79453f8cd39870502dbbe445d62a4f51023e83556373e/mm_clikit-0.0.8-py3-none-any.whl", hash = "sha256:cb0a6ed88ec62837439964e0c448cd76d5efcbac6e431d87fa926fc541e7b610", size = 8008, upload-time = "2026-02-24T11:48:31.314Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/cd/f6698dcdab35ed58060827fd2f68c2f359ea6847fdd0303a416faf3f4ef1/mm_clikit-0.0.9-py3-none-any.whl", hash = "sha256:6a32fb65593e54af85a57690a207c25b5504d4138f6b32e9166d6e37e5d464fe", size = 9803, upload-time = "2026-02-26T06:06:20.696Z" },
 ]
 
 [[package]]

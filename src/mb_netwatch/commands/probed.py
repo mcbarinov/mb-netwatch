@@ -28,6 +28,17 @@ async def _wait_shutdown(shutdown: asyncio.Event, seconds: float) -> None:
         await asyncio.wait_for(shutdown.wait(), timeout=seconds)
 
 
+async def _wait_ip(shutdown: asyncio.Event, ip_trigger: asyncio.Event, seconds: float) -> None:
+    """Wait for shutdown, IP trigger, or timeout — whichever comes first."""
+    trigger_task = asyncio.create_task(ip_trigger.wait())
+    shutdown_task = asyncio.create_task(shutdown.wait())
+    try:
+        await asyncio.wait({trigger_task, shutdown_task}, timeout=seconds, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        trigger_task.cancel()
+        shutdown_task.cancel()
+
+
 async def _latency_loop(app: AppContext, shutdown: asyncio.Event) -> None:
     """Measure latency and record to DB. Recreates session on failure."""
     session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=app.cfg.probed.latency_timeout))
@@ -49,31 +60,44 @@ async def _latency_loop(app: AppContext, shutdown: asyncio.Event) -> None:
         await session.close()
 
 
-async def _vpn_loop(app: AppContext, shutdown: asyncio.Event) -> None:
-    """Check VPN status and record to DB."""
+async def _vpn_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
+    """Check VPN status and record to DB. Signals IP loop on state change."""
+    prev_active: bool | None = None
     while not shutdown.is_set():
         status = await asyncio.to_thread(check_vpn)
         ts = datetime.now(tz=UTC)
         log.debug("vpn=%s, mode=%s, provider=%s", status.is_active, status.tunnel_mode, status.provider)
         app.db.insert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
 
+        if prev_active is not None and status.is_active != prev_active:
+            log.info("VPN state changed (%s -> %s), triggering immediate IP check.", prev_active, status.is_active)
+            ip_trigger.set()
+        prev_active = status.is_active
+
         await _wait_shutdown(shutdown, app.cfg.probed.vpn_interval)
 
 
-async def _ip_loop(app: AppContext, shutdown: asyncio.Event) -> None:
-    """Detect public IP and country, record to DB."""
+async def _ip_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
+    """Detect public IP and country, record to DB. Wakes early on VPN change."""
     # Seed from DB so we skip country lookup on restart if IP is unchanged
     last = app.db.fetch_latest_ip_check()
     previous = IpResult(ip=last.ip, country_code=last.country_code) if last else None
 
     while not shutdown.is_set():
+        triggered = ip_trigger.is_set()
+        if triggered:
+            ip_trigger.clear()
+            # Force fresh country lookup — IP likely changed after VPN toggle
+            previous = None
+
         result = await check_ip(previous=previous, http_timeout=app.cfg.probed.ip_timeout)
         ts = datetime.now(tz=UTC)
         log.debug("ip=%s, country=%s", result.ip, result.country_code)
         app.db.insert_ip_check(ts, result.ip, result.country_code)
         previous = result
 
-        await _wait_shutdown(shutdown, app.cfg.probed.ip_interval)
+        # Wait for next scheduled check or VPN change signal
+        await _wait_ip(shutdown, ip_trigger, app.cfg.probed.ip_interval)
 
 
 async def _purge_loop(app: AppContext, shutdown: asyncio.Event) -> None:
@@ -98,11 +122,13 @@ async def _run(app: AppContext) -> None:
     app.db.purge_old_vpn_checks(app.cfg.probed.retention_days)
     app.db.purge_old_ip_checks(app.cfg.probed.retention_days)
 
+    ip_trigger = asyncio.Event()
+
     try:
         async with asyncio.TaskGroup() as tg:
             tg.create_task(_latency_loop(app, shutdown))
-            tg.create_task(_vpn_loop(app, shutdown))
-            tg.create_task(_ip_loop(app, shutdown))
+            tg.create_task(_vpn_loop(app, shutdown, ip_trigger))
+            tg.create_task(_ip_loop(app, shutdown, ip_trigger))
             tg.create_task(_purge_loop(app, shutdown))
     finally:
         log.info("probed stopped.")

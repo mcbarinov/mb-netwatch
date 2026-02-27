@@ -12,9 +12,8 @@ log = logging.getLogger(__name__)
 
 _IP_SERVICES: list[str] = [
     "https://api.ipify.org",
-    "https://icanhazip.com",
+    "https://ipv4.icanhazip.com",
     "https://checkip.amazonaws.com",
-    "https://ifconfig.me/ip",
     "https://ipinfo.io/ip",
     "https://v4.ident.me",
 ]

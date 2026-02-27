@@ -72,9 +72,8 @@ Detects the public IP address and its country every 60 seconds. Useful for verif
 
 **IP detection services** (plain-text responses):
 - `https://api.ipify.org` — ipify
-- `https://icanhazip.com` — icanhazip
+- `https://ipv4.icanhazip.com` — icanhazip
 - `https://checkip.amazonaws.com` — Amazon
-- `https://ifconfig.me/ip` — ifconfig.me
 - `https://ipinfo.io/ip` — ipinfo
 - `https://v4.ident.me` — ident.me
 

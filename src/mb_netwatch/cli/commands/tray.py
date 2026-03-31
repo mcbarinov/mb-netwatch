@@ -3,13 +3,12 @@
 import time
 
 import typer
-from mm_clikit import is_process_running, write_pid_file
+from mm_clikit import is_process_running, setup_logging, write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
-from mb_netwatch.app_context import use_context
+from mb_netwatch.cli.context import use_context
 from mb_netwatch.config import Config
 from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
-from mb_netwatch.logger import setup_logging
 
 
 class _NetwatchTray:
@@ -120,10 +119,10 @@ def tray(ctx: typer.Context) -> None:
         typer.echo("tray: already running")
         raise typer.Exit(1)
 
-    setup_logging(log_file=app.cfg.tray_log_path)
+    setup_logging("mb_netwatch", app.cfg.tray_log_path)
 
     write_pid_file(app.cfg.tray_pid_path)
     try:
-        _NetwatchTray(app.db, app.cfg).run()
+        _NetwatchTray(app.svc, app.cfg).run()
     finally:
         app.cfg.tray_pid_path.unlink(missing_ok=True)

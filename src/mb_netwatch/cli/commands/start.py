@@ -4,10 +4,11 @@ import shutil
 from typing import Annotated, Literal
 
 import typer
-from mm_clikit import is_process_running, spawn_detached
+from mm_clikit import is_process_running, spawn_daemon
 
-from mb_netwatch.app_context import use_context
-from mb_netwatch.output import StartStopResult
+from mb_netwatch.cli.context import use_context
+from mb_netwatch.cli.output import StartStopResult
+from mb_netwatch.errors import AppError
 
 
 def start(ctx: typer.Context, component: Annotated[Literal["probed", "tray"] | None, typer.Argument()] = None) -> None:
@@ -21,7 +22,7 @@ def start(ctx: typer.Context, component: Annotated[Literal["probed", "tray"] | N
 
         exe = shutil.which("mb-netwatch")
         if not exe:
-            app.out.print_error_and_exit("exe_not_found", "'mb-netwatch' not found in PATH. Install with: uv tool install .")
+            raise AppError("EXE_NOT_FOUND", "'mb-netwatch' not found in PATH. Install with: uv tool install .")
 
-        pid = spawn_detached([exe, name])
+        pid = spawn_daemon([*app.cfg.cli_base_args(), name])
         app.out.print_start_stop(StartStopResult(component=name, message=f"{name}: started (pid {pid})"))

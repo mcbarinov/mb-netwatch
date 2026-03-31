@@ -1,11 +1,14 @@
 """Application settings and user-facing configuration."""
 
+import os
 import tomllib
 from functools import cached_property
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+
+DEFAULT_DATA_DIR = Path.home() / ".local" / "mb-netwatch"
 
 
 class _ProbedConfig(BaseModel):
@@ -85,7 +88,7 @@ class Config(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    data_dir: Path = Path.home() / ".local" / "mb-netwatch"
+    data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Base directory for all application data")
     probed: _ProbedConfig = Field(default_factory=_ProbedConfig)
     tray: _TrayConfig = Field(default_factory=_TrayConfig)
     watch: _WatchConfig = Field(default_factory=_WatchConfig)
@@ -126,26 +129,44 @@ class Config(BaseModel):
         """Log file for the tray process."""
         return self.data_dir / "tray.log"
 
+    def cli_base_args(self) -> list[str]:
+        """Build CLI base args, including --data-dir only when non-default.
+
+        Useful for spawning subprocesses (daemons, workers) that need
+        to inherit the data directory setting.
+        """
+        args: list[str] = ["mb-netwatch"]
+        if self.data_dir != DEFAULT_DATA_DIR:
+            args.extend(["--data-dir", str(self.data_dir)])
+        return args
+
     @staticmethod
-    def build() -> Config:
-        """Read config.toml if it exists, return Config with defaults merged.
+    def build(data_dir: Path | None = None) -> Config:
+        """Build a Config from CLI arg / env var / default, with optional TOML overlay.
 
         Raises ValueError on invalid values or unknown TOML keys.
         """
-        config_path = Path.home() / ".local" / "mb-netwatch" / "config.toml"
-        if not config_path.exists():
-            return Config()
+        if data_dir is not None:
+            resolved = data_dir.resolve()
+        elif env := os.environ.get("MB_NETWATCH_DATA_DIR"):
+            resolved = Path(env).resolve()
+        else:
+            resolved = DEFAULT_DATA_DIR
 
-        with config_path.open("rb") as f:
-            data = tomllib.load(f)
+        config_path = resolved / "config.toml"
+        kwargs: dict[str, Any] = {"data_dir": resolved}
 
-        known_sections = frozenset({"probed", "tray", "watch"})
-        unknown = set(data.keys()) - known_sections
-        if unknown:
-            raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
+        if config_path.exists():
+            with config_path.open("rb") as f:
+                data = tomllib.load(f)
 
-        return Config(
-            probed=_ProbedConfig(**data.get("probed", {})),
-            tray=_TrayConfig(**data.get("tray", {})),
-            watch=_WatchConfig(**data.get("watch", {})),
-        )
+            known_sections = frozenset({"probed", "tray", "watch"})
+            unknown = set(data.keys()) - known_sections
+            if unknown:
+                raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
+
+            kwargs["probed"] = _ProbedConfig(**data.get("probed", {}))
+            kwargs["tray"] = _TrayConfig(**data.get("tray", {}))
+            kwargs["watch"] = _WatchConfig(**data.get("watch", {}))
+
+        return Config(**kwargs)

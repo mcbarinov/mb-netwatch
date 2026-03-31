@@ -5,21 +5,22 @@ import contextlib
 import logging
 import signal
 from datetime import UTC, datetime
-from typing import Annotated
 
 import aiohttp
 import typer
-from mm_clikit import is_process_running, write_pid_file
+from mm_clikit import AppContext, is_process_running, setup_logging, write_pid_file
 
-from mb_netwatch.app_context import AppContext, use_context
-from mb_netwatch.logger import setup_logging
+from mb_netwatch.cli.context import use_context
+from mb_netwatch.cli.output import Output
+from mb_netwatch.config import Config
+from mb_netwatch.db import Db
 from mb_netwatch.probes.ip import IpResult, check_ip
 from mb_netwatch.probes.latency import check_latency
 from mb_netwatch.probes.vpn import check_vpn
 
 log = logging.getLogger(__name__)
 
-app = typer.Typer()
+_Ctx = AppContext[Db, Output, Config]
 
 
 async def _wait_shutdown(shutdown: asyncio.Event, seconds: float) -> None:
@@ -39,7 +40,7 @@ async def _wait_ip(shutdown: asyncio.Event, ip_trigger: asyncio.Event, seconds: 
         shutdown_task.cancel()
 
 
-async def _latency_loop(app: AppContext, shutdown: asyncio.Event) -> None:
+async def _latency_loop(app: _Ctx, shutdown: asyncio.Event) -> None:
     """Measure latency and record to DB. Recreates session on failure."""
     session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=app.cfg.probed.latency_timeout))
     try:
@@ -47,7 +48,7 @@ async def _latency_loop(app: AppContext, shutdown: asyncio.Event) -> None:
             result = await check_latency(session)
             ts = datetime.now(tz=UTC)
             log.debug("latency=%s ms, endpoint=%s", result.latency_ms, result.winner_endpoint)
-            app.db.insert_latency_check(ts, result.latency_ms, result.winner_endpoint)
+            app.svc.insert_latency_check(ts, result.latency_ms, result.winner_endpoint)
 
             # Self-healing: recreate session on failure to drop stale connections
             if result.latency_ms is None:
@@ -60,14 +61,14 @@ async def _latency_loop(app: AppContext, shutdown: asyncio.Event) -> None:
         await session.close()
 
 
-async def _vpn_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
+async def _vpn_loop(app: _Ctx, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
     """Check VPN status and record to DB. Signals IP loop on state change."""
     prev_active: bool | None = None
     while not shutdown.is_set():
         status = await asyncio.to_thread(check_vpn)
         ts = datetime.now(tz=UTC)
         log.debug("vpn=%s, mode=%s, provider=%s", status.is_active, status.tunnel_mode, status.provider)
-        app.db.insert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
+        app.svc.insert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
 
         if prev_active is not None and status.is_active != prev_active:
             log.info("VPN state changed (%s -> %s), triggering immediate IP check.", prev_active, status.is_active)
@@ -77,10 +78,10 @@ async def _vpn_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asynci
         await _wait_shutdown(shutdown, app.cfg.probed.vpn_interval)
 
 
-async def _ip_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
+async def _ip_loop(app: _Ctx, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
     """Detect public IP and country, record to DB. Wakes early on VPN change."""
     # Seed from DB so we skip country lookup on restart if IP is unchanged
-    last = app.db.fetch_latest_ip_check()
+    last = app.svc.fetch_latest_ip_check()
     previous = IpResult(ip=last.ip, country_code=last.country_code) if last else None
 
     while not shutdown.is_set():
@@ -93,34 +94,34 @@ async def _ip_loop(app: AppContext, shutdown: asyncio.Event, ip_trigger: asyncio
         result = await check_ip(previous=previous, http_timeout=app.cfg.probed.ip_timeout)
         ts = datetime.now(tz=UTC)
         log.debug("ip=%s, country=%s", result.ip, result.country_code)
-        app.db.insert_ip_check(ts, result.ip, result.country_code)
+        app.svc.insert_ip_check(ts, result.ip, result.country_code)
         previous = result
 
         # Wait for next scheduled check or VPN change signal
         await _wait_ip(shutdown, ip_trigger, app.cfg.probed.ip_interval)
 
 
-async def _purge_loop(app: AppContext, shutdown: asyncio.Event) -> None:
+async def _purge_loop(app: _Ctx, shutdown: asyncio.Event) -> None:
     """Purge old data periodically."""
     while not shutdown.is_set():
         await _wait_shutdown(shutdown, app.cfg.probed.purge_interval)
         if not shutdown.is_set():
-            lat_deleted = app.db.purge_old_latency_checks(app.cfg.probed.retention_days)
-            vpn_deleted = app.db.purge_old_vpn_checks(app.cfg.probed.retention_days)
-            ip_deleted = app.db.purge_old_ip_checks(app.cfg.probed.retention_days)
+            lat_deleted = app.svc.purge_old_latency_checks(app.cfg.probed.retention_days)
+            vpn_deleted = app.svc.purge_old_vpn_checks(app.cfg.probed.retention_days)
+            ip_deleted = app.svc.purge_old_ip_checks(app.cfg.probed.retention_days)
             log.info("Purged %d old latency checks, %d old VPN checks, %d old IP checks.", lat_deleted, vpn_deleted, ip_deleted)
 
 
-async def _run(app: AppContext) -> None:
+async def _run(app: _Ctx) -> None:
     """Launch latency, VPN, and purge loops; shut down cleanly on signal."""
     shutdown = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, shutdown.set)
 
-    app.db.purge_old_latency_checks(app.cfg.probed.retention_days)
-    app.db.purge_old_vpn_checks(app.cfg.probed.retention_days)
-    app.db.purge_old_ip_checks(app.cfg.probed.retention_days)
+    app.svc.purge_old_latency_checks(app.cfg.probed.retention_days)
+    app.svc.purge_old_vpn_checks(app.cfg.probed.retention_days)
+    app.svc.purge_old_ip_checks(app.cfg.probed.retention_days)
 
     ip_trigger = asyncio.Event()
 
@@ -134,15 +135,14 @@ async def _run(app: AppContext) -> None:
         log.info("probed stopped.")
 
 
-@app.command()
-def probed(ctx: typer.Context, *, debug: Annotated[bool, typer.Option(help="Enable debug logging.")] = False) -> None:
+def probed(ctx: typer.Context) -> None:
     """Run continuous background measurements every 2 seconds."""
     app = use_context(ctx)
     if is_process_running(app.cfg.probed_pid_path, remove_stale=True, skip_self=True):
         typer.echo("probed: already running")
         raise typer.Exit(1)
 
-    setup_logging(debug=debug, log_file=app.cfg.probed_log_path)
+    setup_logging("mb_netwatch", app.cfg.probed_log_path)
     log.info("probed starting.")
     write_pid_file(app.cfg.probed_pid_path)
     try:

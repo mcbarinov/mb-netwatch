@@ -111,42 +111,32 @@ class TestFieldValidation:
 class TestConfigBuild:
     """Config.build() reads TOML from disk or returns defaults."""
 
-    def test_no_config_file_returns_defaults(self, tmp_path, monkeypatch):
+    def test_no_config_file_returns_defaults(self, tmp_path):
         """Missing config file returns default Config."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        cfg = Config.build()
+        cfg = Config.build(data_dir=tmp_path)
         assert cfg.probed.latency_interval == 2.0
         assert cfg.tray.ok_threshold_ms == 300
 
-    def test_partial_override(self, tmp_path, monkeypatch):
+    def test_partial_override(self, tmp_path):
         """Valid TOML with partial overrides merges with defaults."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        config_dir = tmp_path / ".local" / "mb-netwatch"
-        config_dir.mkdir(parents=True)
-        (config_dir / "config.toml").write_text("[probed]\nlatency_interval = 5.0\n\n[tray]\nok_threshold_ms = 100\n")
+        (tmp_path / "config.toml").write_text("[probed]\nlatency_interval = 5.0\n\n[tray]\nok_threshold_ms = 100\n")
 
-        cfg = Config.build()
+        cfg = Config.build(data_dir=tmp_path)
         assert cfg.probed.latency_interval == 5.0
         assert cfg.probed.vpn_interval == 10.0  # default preserved
         assert cfg.tray.ok_threshold_ms == 100
         assert cfg.tray.slow_threshold_ms == 800  # default preserved
 
-    def test_unknown_section_raises(self, tmp_path, monkeypatch):
+    def test_unknown_section_raises(self, tmp_path):
         """Unknown TOML section raises ValueError."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        config_dir = tmp_path / ".local" / "mb-netwatch"
-        config_dir.mkdir(parents=True)
-        (config_dir / "config.toml").write_text("[bogus]\nfoo = 1\n")
+        (tmp_path / "config.toml").write_text("[bogus]\nfoo = 1\n")
 
         with pytest.raises(ValueError, match="Unknown config sections"):
-            Config.build()
+            Config.build(data_dir=tmp_path)
 
-    def test_unknown_key_in_known_section_raises(self, tmp_path, monkeypatch):
+    def test_unknown_key_in_known_section_raises(self, tmp_path):
         """Unknown key inside a known section raises ValidationError (extra=forbid)."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        config_dir = tmp_path / ".local" / "mb-netwatch"
-        config_dir.mkdir(parents=True)
-        (config_dir / "config.toml").write_text("[probed]\nno_such_key = 99\n")
+        (tmp_path / "config.toml").write_text("[probed]\nno_such_key = 99\n")
 
         with pytest.raises(ValidationError):
-            Config.build()
+            Config.build(data_dir=tmp_path)

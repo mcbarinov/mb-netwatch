@@ -3,15 +3,17 @@
 from typing import Annotated, Literal
 
 import typer
-from mm_clikit import is_process_running, read_pid_file, stop_process
+from mm_clikit import AppContext, is_process_running, read_pid_file, stop_process
 
-from mb_netwatch.app_context import AppContext, use_context
-from mb_netwatch.output import StartStopResult
+from mb_netwatch.cli.context import use_context
+from mb_netwatch.cli.output import Output, StartStopResult
+from mb_netwatch.config import Config
+from mb_netwatch.db import Db
 
 _STOP_TIMEOUT = 5.0
 
 
-def _stop_component(component: str, app: AppContext) -> bool:
+def _stop_component(component: str, app: AppContext[Db, Output, Config]) -> bool:
     """Stop a single component by sending SIGTERM and waiting for exit."""
     path = app.cfg.data_dir / f"{component}.pid"
     if not is_process_running(path, remove_stale=True, skip_self=True):

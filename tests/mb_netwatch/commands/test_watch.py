@@ -2,7 +2,7 @@
 
 import time
 
-from mb_netwatch.commands.watch import _format_ip, _format_row, _format_vpn
+from mb_netwatch.cli.commands.watch import _format_ip, _format_row, _format_vpn
 from mb_netwatch.db import IpCheckRow, LatencyRow, VpnCheckRow
 
 

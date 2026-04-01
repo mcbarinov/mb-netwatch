@@ -15,6 +15,7 @@ from mb_netwatch.cli.commands.watch import watch
 from mb_netwatch.cli.output import Output
 from mb_netwatch.config import Config
 from mb_netwatch.db import Db
+from mb_netwatch.service import Service
 
 app = TyperPlus(package_name="mb-netwatch")
 
@@ -30,7 +31,7 @@ def main(
     cfg.data_dir.mkdir(parents=True, exist_ok=True)
     db = Db(cfg.db_path)
     ctx.call_on_close(db.close)
-    ctx.obj = AppContext(svc=db, out=Output(), cfg=cfg)
+    ctx.obj = AppContext(svc=Service(db, cfg), out=Output(), cfg=cfg)
 
 
 app.command(aliases=["p"])(probe)

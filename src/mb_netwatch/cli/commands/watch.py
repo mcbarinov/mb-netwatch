@@ -10,9 +10,10 @@ from mm_clikit import AppContext
 from mb_netwatch.cli.context import use_context
 from mb_netwatch.cli.output import Output, WatchRow
 from mb_netwatch.config import Config
-from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.db import IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.service import Service
 
-_Ctx = AppContext[Db, Output, Config]
+_Ctx = AppContext[Service, Output, Config]
 
 
 def _format_vpn(vpn: VpnCheckRow | None) -> str:

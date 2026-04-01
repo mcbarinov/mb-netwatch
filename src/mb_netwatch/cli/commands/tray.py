@@ -3,26 +3,24 @@
 import time
 
 import typer
-from mm_clikit import is_process_running, setup_logging, write_pid_file
+from mm_clikit import CliError, is_process_running, setup_logging, write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.cli.context import use_context
-from mb_netwatch.config import Config
-from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.db import IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.service import Service
 
 
 class _NetwatchTray:
     """Menu bar tray that displays network monitoring status.
 
     Args:
-        db: Database access object for reading check data.
-        cfg: Application configuration.
+        svc: Application service for reading check data.
 
     """
 
-    def __init__(self, db: Db, cfg: Config) -> None:
-        self._db = db
-        self._cfg = cfg
+    def __init__(self, svc: Service) -> None:
+        self._svc = svc
         self._tray = TrayApp(title="...")
 
         # Info items (non-interactive)
@@ -35,14 +33,14 @@ class _NetwatchTray:
 
     def run(self) -> None:
         """Start the polling timer and enter the event loop."""
-        self._tray.start_timer(self._cfg.tray.poll_interval, self._refresh)
+        self._tray.start_timer(self._svc.cfg.tray.poll_interval, self._refresh)
         self._tray.run()
 
     def _refresh(self) -> None:
         """Poll DB and update menu bar title and detail items."""
-        latency = self._db.fetch_latest_latency_check()
-        ip = self._db.fetch_latest_ip_check()
-        vpn = self._db.fetch_latest_vpn_check()
+        latency = self._svc.fetch_latest_latency_check()
+        ip = self._svc.fetch_latest_ip_check()
+        vpn = self._svc.fetch_latest_vpn_check()
         stale = self._is_stale(latency)
 
         self._tray.title = self._format_title(latency, ip, stale=stale)
@@ -99,9 +97,9 @@ class _NetwatchTray:
         """Classify latency into a status band label."""
         if latency_ms is None:
             return "✕"
-        if latency_ms < self._cfg.tray.ok_threshold_ms:
+        if latency_ms < self._svc.cfg.tray.ok_threshold_ms:
             return "●"
-        if latency_ms < self._cfg.tray.slow_threshold_ms:
+        if latency_ms < self._svc.cfg.tray.slow_threshold_ms:
             return "◐"
         return "○"
 
@@ -109,20 +107,19 @@ class _NetwatchTray:
         """Check if the latest latency row is too old to be trusted."""
         if latency is None:
             return False  # no data at all is handled separately (shows "...")
-        return (time.time() - latency.ts) > self._cfg.tray.stale_threshold
+        return (time.time() - latency.ts) > self._svc.cfg.tray.stale_threshold
 
 
 def tray(ctx: typer.Context) -> None:
     """Run menu bar UI process that displays current status."""
     app = use_context(ctx)
     if is_process_running(app.cfg.tray_pid_path, remove_stale=True, skip_self=True):
-        typer.echo("tray: already running")
-        raise typer.Exit(1)
+        raise CliError("tray: already running", "ALREADY_RUNNING")
 
     setup_logging("mb_netwatch", app.cfg.tray_log_path)
 
     write_pid_file(app.cfg.tray_pid_path)
     try:
-        _NetwatchTray(app.svc, app.cfg).run()
+        _NetwatchTray(app.svc).run()
     finally:
         app.cfg.tray_pid_path.unlink(missing_ok=True)

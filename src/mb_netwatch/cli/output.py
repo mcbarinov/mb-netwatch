@@ -5,18 +5,7 @@ from urllib.parse import urlparse
 
 from mm_clikit import DualModeOutput
 
-
-@dataclass(frozen=True, slots=True)
-class ProbeResult:
-    """Result of a one-shot connectivity probe."""
-
-    latency_ms: float | None
-    winner_endpoint: str | None
-    vpn_active: bool
-    tunnel_mode: str
-    vpn_provider: str | None
-    ip: str | None
-    country_code: str | None
+from mb_netwatch.service import ProbeResult
 
 
 @dataclass(frozen=True, slots=True)

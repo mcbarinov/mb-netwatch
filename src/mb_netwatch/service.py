@@ -1,14 +1,19 @@
 """Core business logic."""
 
 import asyncio
+import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+
+import aiohttp
 
 from mb_netwatch.config import Config
 from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
-from mb_netwatch.probes.ip import check_ip
+from mb_netwatch.probes.ip import IpResult, check_ip
 from mb_netwatch.probes.latency import check_latency
 from mb_netwatch.probes.vpn import check_vpn
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +42,11 @@ class Service:
         """
         self._db = db
         self._cfg = cfg
+        # Daemon state: lazy-created HTTP session for latency probes (reused for connection keep-alive)
+        self._latency_session: aiohttp.ClientSession | None = None
+        # Daemon state: last IP result for skipping redundant country lookups
+        self._last_ip_result: IpResult | None = None
+        self._ip_state_seeded = False
 
     @property
     def cfg(self) -> Config:
@@ -62,11 +72,62 @@ class Service:
             country_code=ip_result.country_code,
         )
 
-    # -- Latency checks --------------------------------------------------------
+    # -- Daemon check methods --------------------------------------------------
 
-    def insert_latency_check(self, ts: datetime, latency_ms: float | None, winner_endpoint: str | None) -> None:
-        """Insert a single latency check result."""
-        self._db.insert_latency_check(ts, latency_ms, winner_endpoint)
+    async def run_latency_check(self) -> None:
+        """Run a single latency probe, log and store the result. Manages HTTP session lifecycle."""
+        cfg = self._cfg.probed
+        if self._latency_session is None:
+            self._latency_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=cfg.latency_timeout))
+
+        result = await check_latency(self._latency_session)
+        ts = datetime.now(tz=UTC)
+        log.debug("latency=%s ms, endpoint=%s", result.latency_ms, result.winner_endpoint)
+        self._db.insert_latency_check(ts, result.latency_ms, result.winner_endpoint)
+
+        # Self-healing: recreate session on failure to drop stale connections
+        if result.latency_ms is None:
+            log.debug("Latency check failed, recreating HTTP session.")
+            await self._latency_session.close()
+            self._latency_session = None
+
+    async def run_vpn_check(self) -> bool:
+        """Run a single VPN check, log and store the result. Return whether VPN is active."""
+        status = await asyncio.to_thread(check_vpn)
+        ts = datetime.now(tz=UTC)
+        log.debug("vpn=%s, mode=%s, provider=%s", status.is_active, status.tunnel_mode, status.provider)
+        self._db.insert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
+        return status.is_active
+
+    async def run_ip_check(self, *, vpn_changed: bool = False) -> None:
+        """Run a single IP check, log and store the result.
+
+        Args:
+            vpn_changed: When True, forces fresh country lookup (IP likely changed after VPN toggle).
+
+        """
+        # Seed from DB on first call so we skip country lookup on restart if IP is unchanged
+        if not self._ip_state_seeded:
+            last = self._db.fetch_latest_ip_check()
+            self._last_ip_result = IpResult(ip=last.ip, country_code=last.country_code) if last else None
+            self._ip_state_seeded = True
+
+        if vpn_changed:
+            self._last_ip_result = None
+
+        result = await check_ip(previous=self._last_ip_result, http_timeout=self._cfg.probed.ip_timeout)
+        ts = datetime.now(tz=UTC)
+        log.debug("ip=%s, country=%s", result.ip, result.country_code)
+        self._db.insert_ip_check(ts, result.ip, result.country_code)
+        self._last_ip_result = result
+
+    async def close_latency_session(self) -> None:
+        """Close the persistent latency HTTP session if open."""
+        if self._latency_session is not None:
+            await self._latency_session.close()
+            self._latency_session = None
+
+    # -- Latency checks --------------------------------------------------------
 
     def fetch_latest_latency_check(self) -> LatencyRow | None:
         """Return the most recent latency check, or None if table is empty."""
@@ -82,10 +143,6 @@ class Service:
 
     # -- VPN checks ------------------------------------------------------------
 
-    def insert_vpn_check(self, ts: datetime, is_active: bool, tunnel_mode: str, provider: str | None) -> None:
-        """Insert a single VPN check result."""
-        self._db.insert_vpn_check(ts, is_active, tunnel_mode, provider)
-
     def fetch_latest_vpn_check(self) -> VpnCheckRow | None:
         """Return the most recent VPN check, or None if table is empty."""
         return self._db.fetch_latest_vpn_check()
@@ -99,10 +156,6 @@ class Service:
         return self._db.purge_old_vpn_checks(retention_days)
 
     # -- IP checks -------------------------------------------------------------
-
-    def insert_ip_check(self, ts: datetime, ip: str | None, country_code: str | None) -> None:
-        """Insert a single IP check result."""
-        self._db.insert_ip_check(ts, ip, country_code)
 
     def fetch_latest_ip_check(self) -> IpCheckRow | None:
         """Return the most recent IP check, or None if table is empty."""

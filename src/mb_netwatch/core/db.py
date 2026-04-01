@@ -1,26 +1,40 @@
 """SQLite storage for latency, VPN, and IP check results."""
 
 import sqlite3
-from dataclasses import dataclass
+from abc import abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Self
 
 from mm_clikit import SqliteDb
+from pydantic import BaseModel
 
 # -- Row types -----------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
-class LatencyRow:
+class SqliteRow(BaseModel):
+    """Base class for database row models."""
+
+    @classmethod
+    @abstractmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row."""
+
+
+class LatencyRow(SqliteRow):
     """Single latency row from the database."""
 
     ts: float
     latency_ms: float | None
     winner_endpoint: str | None
 
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row."""
+        return cls(ts=row["ts"], latency_ms=row["latency_ms"], winner_endpoint=row["winner_endpoint"])
 
-@dataclass(frozen=True, slots=True)
-class VpnCheckRow:
+
+class VpnCheckRow(SqliteRow):
     """Single VPN check row from the database."""
 
     ts: float
@@ -28,14 +42,23 @@ class VpnCheckRow:
     tunnel_mode: str
     provider: str | None
 
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row."""
+        return cls(ts=row["ts"], is_active=bool(row["is_active"]), tunnel_mode=row["tunnel_mode"], provider=row["provider"])
 
-@dataclass(frozen=True, slots=True)
-class IpCheckRow:
+
+class IpCheckRow(SqliteRow):
     """Single IP check row from the database."""
 
     ts: float
     ip: str | None
     country_code: str | None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row."""
+        return cls(ts=row["ts"], ip=row["ip"], country_code=row["country_code"])
 
 
 def _migrate_v1(conn: sqlite3.Connection) -> None:
@@ -78,16 +101,14 @@ class Db(SqliteDb):
     def fetch_latest_latency_check(self) -> LatencyRow | None:
         """Return the most recent latency check, or None if table is empty."""
         row = self.conn.execute("SELECT ts, latency_ms, winner_endpoint FROM latency_checks ORDER BY ts DESC LIMIT 1").fetchone()
-        if row is None:
-            return None
-        return LatencyRow(ts=row["ts"], latency_ms=row["latency_ms"], winner_endpoint=row["winner_endpoint"])
+        return LatencyRow.from_row(row) if row else None
 
     def fetch_latency_checks_since(self, since_ts: float) -> list[LatencyRow]:
         """Return all latency checks with ts > since_ts, ordered by ts ascending."""
         rows = self.conn.execute(
             "SELECT ts, latency_ms, winner_endpoint FROM latency_checks WHERE ts > ? ORDER BY ts ASC", (since_ts,)
         ).fetchall()
-        return [LatencyRow(ts=r["ts"], latency_ms=r["latency_ms"], winner_endpoint=r["winner_endpoint"]) for r in rows]
+        return [LatencyRow.from_row(r) for r in rows]
 
     def purge_old_latency_checks(self, retention_days: int) -> int:
         """Delete latency checks older than *retention_days*. Return rows deleted."""
@@ -109,21 +130,14 @@ class Db(SqliteDb):
     def fetch_latest_vpn_check(self) -> VpnCheckRow | None:
         """Return the most recent VPN check, or None if table is empty."""
         row = self.conn.execute("SELECT ts, is_active, tunnel_mode, provider FROM vpn_checks ORDER BY ts DESC LIMIT 1").fetchone()
-        if row is None:
-            return None
-        return VpnCheckRow(
-            ts=row["ts"], is_active=bool(row["is_active"]), tunnel_mode=row["tunnel_mode"], provider=row["provider"]
-        )
+        return VpnCheckRow.from_row(row) if row else None
 
     def fetch_vpn_checks_since(self, since_ts: float) -> list[VpnCheckRow]:
         """Return all VPN checks with ts > since_ts, ordered by ts ascending."""
         rows = self.conn.execute(
             "SELECT ts, is_active, tunnel_mode, provider FROM vpn_checks WHERE ts > ? ORDER BY ts ASC", (since_ts,)
         ).fetchall()
-        return [
-            VpnCheckRow(ts=r["ts"], is_active=bool(r["is_active"]), tunnel_mode=r["tunnel_mode"], provider=r["provider"])
-            for r in rows
-        ]
+        return [VpnCheckRow.from_row(r) for r in rows]
 
     def purge_old_vpn_checks(self, retention_days: int) -> int:
         """Delete VPN checks older than *retention_days*. Return rows deleted."""
@@ -142,16 +156,14 @@ class Db(SqliteDb):
     def fetch_latest_ip_check(self) -> IpCheckRow | None:
         """Return the most recent IP check, or None if table is empty."""
         row = self.conn.execute("SELECT ts, ip, country_code FROM ip_checks ORDER BY ts DESC LIMIT 1").fetchone()
-        if row is None:
-            return None
-        return IpCheckRow(ts=row["ts"], ip=row["ip"], country_code=row["country_code"])
+        return IpCheckRow.from_row(row) if row else None
 
     def fetch_ip_checks_since(self, since_ts: float) -> list[IpCheckRow]:
         """Return all IP checks with ts > since_ts, ordered by ts ascending."""
         rows = self.conn.execute(
             "SELECT ts, ip, country_code FROM ip_checks WHERE ts > ? ORDER BY ts ASC", (since_ts,)
         ).fetchall()
-        return [IpCheckRow(ts=r["ts"], ip=r["ip"], country_code=r["country_code"]) for r in rows]
+        return [IpCheckRow.from_row(r) for r in rows]
 
     def purge_old_ip_checks(self, retention_days: int) -> int:
         """Delete IP checks older than *retention_days*. Return rows deleted."""

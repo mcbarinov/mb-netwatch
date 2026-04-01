@@ -41,6 +41,7 @@ Probe targets are **captive portal detection endpoints** — lightweight URLs th
 **Polling:**
 - A probe runs every 2 seconds
 - Each measurement is stored as a raw value in the database
+
 ### VPN status
 
 Detects VPN state every 10 seconds and stores only information that is directly useful for end users:
@@ -98,10 +99,28 @@ Detects the public IP address and its country every 60 seconds. Useful for verif
 
 ## Architecture
 
+### Core (`core/`)
+
+Central application layer. Holds database, business logic, and probe implementations. Consumers never import from `core/` directly — they receive a `Core` instance and access everything through it:
+
+- `core.db` — database (reads and writes)
+- `core.cfg` — application configuration
+- `core.service` — business logic (running probes, storing results)
+
+### Consumers
+
+Three independent consumers of `Core`:
+
+- **CLI** (`cli/`) — command-line interface. Each command receives `Core` and `Output` via `CoreContext`.
+- **Daemon** (`daemon.py`) — long-running background process. Orchestrates scheduling (loops, timers, signals) and delegates all probe/store logic to `core.service`.
+- **Tray** (`tray.py`) — macOS menu bar UI. Polls `core.db` for latest results and updates the icon.
+
+### Processes
+
 Two long-running processes in normal operation:
 
-- **probed** (`mb-netwatch probed`) — source of truth; measures latency every 2 seconds, VPN status every 10 seconds, and public IP every 60 seconds; writes results to SQLite.
-- **tray** (`mb-netwatch tray`) — UI only; reads latest samples from SQLite, updates menu bar icon and dropdown.
+- **probed** (`mb-netwatch probed`) — runs the daemon; measures latency every 2 s, VPN status every 10 s, public IP every 60 s; writes to SQLite via `core.service`.
+- **tray** (`mb-netwatch tray`) — UI only; reads latest samples from SQLite via `core.db`, updates menu bar icon and dropdown.
 
 The tray must not perform network probing directly. This separation keeps UI responsive and simplifies debugging.
 

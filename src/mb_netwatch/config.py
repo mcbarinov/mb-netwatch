@@ -169,4 +169,6 @@ class Config(BaseModel):
             kwargs["tray"] = _TrayConfig(**data.get("tray", {}))
             kwargs["watch"] = _WatchConfig(**data.get("watch", {}))
 
-        return Config(**kwargs)
+        cfg = Config(**kwargs)
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        return cfg

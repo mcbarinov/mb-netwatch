@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from mm_clikit import DualModeOutput
 
-from mb_netwatch.service import ProbeResult
+from mb_netwatch.core import ProbeResult
 
 
 @dataclass(frozen=True, slots=True)

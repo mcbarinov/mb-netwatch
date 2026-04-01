@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 import aiohttp
 
 from mb_netwatch.config import Config
-from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
-from mb_netwatch.probes.ip import IpResult, check_ip
-from mb_netwatch.probes.latency import check_latency
-from mb_netwatch.probes.vpn import check_vpn
+from mb_netwatch.core.db import Db
+from mb_netwatch.core.probes.ip import IpResult, check_ip
+from mb_netwatch.core.probes.latency import check_latency
+from mb_netwatch.core.probes.vpn import check_vpn
 
 log = logging.getLogger(__name__)
 
@@ -47,11 +47,6 @@ class Service:
         # Daemon state: last IP result for skipping redundant country lookups
         self._last_ip_result: IpResult | None = None
         self._ip_state_seeded = False
-
-    @property
-    def cfg(self) -> Config:
-        """Application configuration."""
-        return self._cfg
 
     # -- One-shot probe --------------------------------------------------------
 
@@ -126,45 +121,3 @@ class Service:
         if self._latency_session is not None:
             await self._latency_session.close()
             self._latency_session = None
-
-    # -- Latency checks --------------------------------------------------------
-
-    def fetch_latest_latency_check(self) -> LatencyRow | None:
-        """Return the most recent latency check, or None if table is empty."""
-        return self._db.fetch_latest_latency_check()
-
-    def fetch_latency_checks_since(self, since_ts: float) -> list[LatencyRow]:
-        """Return all latency checks with ts > since_ts, ordered by ts ascending."""
-        return self._db.fetch_latency_checks_since(since_ts)
-
-    def purge_old_latency_checks(self, retention_days: int) -> int:
-        """Delete latency checks older than *retention_days*. Return rows deleted."""
-        return self._db.purge_old_latency_checks(retention_days)
-
-    # -- VPN checks ------------------------------------------------------------
-
-    def fetch_latest_vpn_check(self) -> VpnCheckRow | None:
-        """Return the most recent VPN check, or None if table is empty."""
-        return self._db.fetch_latest_vpn_check()
-
-    def fetch_vpn_checks_since(self, since_ts: float) -> list[VpnCheckRow]:
-        """Return all VPN checks with ts > since_ts, ordered by ts ascending."""
-        return self._db.fetch_vpn_checks_since(since_ts)
-
-    def purge_old_vpn_checks(self, retention_days: int) -> int:
-        """Delete VPN checks older than *retention_days*. Return rows deleted."""
-        return self._db.purge_old_vpn_checks(retention_days)
-
-    # -- IP checks -------------------------------------------------------------
-
-    def fetch_latest_ip_check(self) -> IpCheckRow | None:
-        """Return the most recent IP check, or None if table is empty."""
-        return self._db.fetch_latest_ip_check()
-
-    def fetch_ip_checks_since(self, since_ts: float) -> list[IpCheckRow]:
-        """Return all IP checks with ts > since_ts, ordered by ts ascending."""
-        return self._db.fetch_ip_checks_since(since_ts)
-
-    def purge_old_ip_checks(self, retention_days: int) -> int:
-        """Delete IP checks older than *retention_days*. Return rows deleted."""
-        return self._db.purge_old_ip_checks(retention_days)

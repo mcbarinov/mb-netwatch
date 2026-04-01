@@ -5,15 +5,10 @@ import time
 from datetime import UTC, datetime
 
 import typer
-from mm_clikit import AppContext
 
-from mb_netwatch.cli.context import use_context
-from mb_netwatch.cli.output import Output, WatchRow
-from mb_netwatch.config import Config
-from mb_netwatch.db import IpCheckRow, LatencyRow, VpnCheckRow
-from mb_netwatch.service import Service
-
-_Ctx = AppContext[Service, Output, Config]
+from mb_netwatch.cli.context import CoreContext, use_context
+from mb_netwatch.cli.output import WatchRow
+from mb_netwatch.core.db import IpCheckRow, LatencyRow, VpnCheckRow
 
 
 def _format_vpn(vpn: VpnCheckRow | None) -> str:
@@ -64,38 +59,38 @@ def _make_watch_row(row: LatencyRow, vpn: VpnCheckRow | None, ip_check: IpCheckR
     )
 
 
-def _poll_loop(app: _Ctx) -> None:
+def _poll_loop(app: CoreContext) -> None:
     """Poll the database for new latency/VPN/IP rows and print them."""
     latency_cursor_ts = time.time()
 
     # Load latest VPN and IP status
-    cached_vpn = app.svc.fetch_latest_vpn_check()
+    cached_vpn = app.core.db.fetch_latest_vpn_check()
     vpn_cursor_ts = cached_vpn.ts if cached_vpn else 0.0
-    cached_ip = app.svc.fetch_latest_ip_check()
+    cached_ip = app.core.db.fetch_latest_ip_check()
     ip_cursor_ts = cached_ip.ts if cached_ip else 0.0
 
     while True:
         # Check for newer VPN data
-        vpn_rows = app.svc.fetch_vpn_checks_since(vpn_cursor_ts)
+        vpn_rows = app.core.db.fetch_vpn_checks_since(vpn_cursor_ts)
         if vpn_rows:
             cached_vpn = vpn_rows[-1]
             vpn_cursor_ts = cached_vpn.ts
 
         # Check for newer IP data
-        ip_rows = app.svc.fetch_ip_checks_since(ip_cursor_ts)
+        ip_rows = app.core.db.fetch_ip_checks_since(ip_cursor_ts)
         if ip_rows:
             cached_ip = ip_rows[-1]
             ip_cursor_ts = cached_ip.ts
 
         # Print new latency rows with cached VPN and IP status
-        rows = app.svc.fetch_latency_checks_since(latency_cursor_ts)
+        rows = app.core.db.fetch_latency_checks_since(latency_cursor_ts)
         for row in rows:
             formatted = _format_row(row, cached_vpn, cached_ip)
             watch_row = _make_watch_row(row, cached_vpn, cached_ip)
             app.out.print_watch_row(watch_row, formatted)
             latency_cursor_ts = row.ts
 
-        time.sleep(app.cfg.watch.poll_interval)
+        time.sleep(app.core.cfg.watch.poll_interval)
 
 
 def watch(ctx: typer.Context) -> None:

@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from mb_netwatch.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.core.db import Db, IpCheckRow, LatencyRow, VpnCheckRow
 
 
 @pytest.fixture

@@ -18,5 +18,5 @@ def probe(
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     app = use_context(ctx)
-    result = asyncio.run(app.svc.run_probe())
+    result = asyncio.run(app.core.service.run_probe())
     app.out.print_probe(result)

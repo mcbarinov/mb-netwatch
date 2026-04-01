@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from mm_clikit import AppContext, TyperPlus
+from mm_clikit import TyperPlus
 
 from mb_netwatch.cli.commands.probe import probe
 from mb_netwatch.cli.commands.probed import probed
@@ -12,10 +12,11 @@ from mb_netwatch.cli.commands.start import start
 from mb_netwatch.cli.commands.stop import stop
 from mb_netwatch.cli.commands.tray import tray
 from mb_netwatch.cli.commands.watch import watch
+from mb_netwatch.cli.context import CoreContext
 from mb_netwatch.cli.output import Output
 from mb_netwatch.config import Config
-from mb_netwatch.db import Db
-from mb_netwatch.service import Service
+from mb_netwatch.core import Core
+from mb_netwatch.core.db import Db
 
 app = TyperPlus(package_name="mb-netwatch")
 
@@ -28,10 +29,9 @@ def main(
 ) -> None:
     """Internet connection monitor for macOS."""
     cfg = Config.build(data_dir)
-    cfg.data_dir.mkdir(parents=True, exist_ok=True)
     db = Db(cfg.db_path)
     ctx.call_on_close(db.close)
-    ctx.obj = AppContext(svc=Service(db, cfg), out=Output(), cfg=cfg)
+    ctx.obj = CoreContext(core=Core(db, cfg), out=Output())
 
 
 app.command(aliases=["p"])(probe)

@@ -1,3 +1,3 @@
 """CLI entry point."""
 
-from mb_netwatch.cli.app import app as app
+from mb_netwatch.cli.main import app as app

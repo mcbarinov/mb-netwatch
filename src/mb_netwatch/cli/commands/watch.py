@@ -5,9 +5,11 @@ import time
 from datetime import UTC, datetime
 
 import typer
+from mm_clikit import CoreContext
 
-from mb_netwatch.cli.context import CoreContext, use_context
-from mb_netwatch.cli.output import WatchRow
+from mb_netwatch.cli.context import use_context
+from mb_netwatch.cli.output import Output, WatchRow
+from mb_netwatch.core import Core
 from mb_netwatch.core.db import IpCheckRow, LatencyRow, VpnCheckRow
 
 
@@ -59,7 +61,7 @@ def _make_watch_row(row: LatencyRow, vpn: VpnCheckRow | None, ip_check: IpCheckR
     )
 
 
-def _poll_loop(app: CoreContext) -> None:
+def _poll_loop(app: CoreContext[Core, Output]) -> None:
     """Poll the database for new latency/VPN/IP rows and print them."""
     latency_cursor_ts = time.time()
 
@@ -90,7 +92,7 @@ def _poll_loop(app: CoreContext) -> None:
             app.out.print_watch_row(watch_row, formatted)
             latency_cursor_ts = row.ts
 
-        time.sleep(app.core.cfg.watch.poll_interval)
+        time.sleep(app.core.config.watch.poll_interval)
 
 
 def watch(ctx: typer.Context) -> None:

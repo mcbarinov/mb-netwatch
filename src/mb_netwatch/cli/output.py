@@ -1,16 +1,17 @@
 """Structured output for CLI and JSON modes."""
 
-from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 
 from mm_clikit import DualModeOutput
+from pydantic import BaseModel, ConfigDict
 
 from mb_netwatch.core import ProbeResult
 
 
-@dataclass(frozen=True, slots=True)
-class WatchRow:
+class WatchRow(BaseModel):
     """Single measurement row for the watch stream."""
+
+    model_config = ConfigDict(frozen=True)
 
     ts: str
     latency_ms: float | None
@@ -21,9 +22,10 @@ class WatchRow:
     country_code: str | None
 
 
-@dataclass(frozen=True, slots=True)
-class StartStopResult:
+class StartStopResult(BaseModel):
     """Result of a start/stop command."""
+
+    model_config = ConfigDict(frozen=True)
 
     component: str
     message: str
@@ -61,12 +63,12 @@ class Output(DualModeOutput):
         else:
             lines.append(f"IP: {result.ip}")
 
-        self.output(json_data=asdict(result), display_data="\n".join(lines))
+        self.output(json_data=result.model_dump(), display_data="\n".join(lines))
 
     def print_watch_row(self, row: WatchRow, formatted_line: str) -> None:
         """Print a single watch row in JSON or human-readable format."""
-        self.output(json_data=asdict(row), display_data=formatted_line)
+        self.output(json_data=row.model_dump(), display_data=formatted_line)
 
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""
-        self.output(json_data=asdict(result), display_data=result.message)
+        self.output(json_data=result.model_dump(), display_data=result.message)

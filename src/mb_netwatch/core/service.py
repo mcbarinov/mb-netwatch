@@ -2,10 +2,10 @@
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import aiohttp
+from pydantic import BaseModel, ConfigDict
 
 from mb_netwatch.config import Config
 from mb_netwatch.core.db import Db
@@ -16,9 +16,10 @@ from mb_netwatch.core.probes.vpn import check_vpn
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class ProbeResult:
+class ProbeResult(BaseModel):
     """Result of a one-shot connectivity probe."""
+
+    model_config = ConfigDict(frozen=True)
 
     latency_ms: float | None
     winner_endpoint: str | None
@@ -32,16 +33,16 @@ class ProbeResult:
 class Service:
     """Main application service."""
 
-    def __init__(self, db: Db, cfg: Config) -> None:
+    def __init__(self, db: Db, config: Config) -> None:
         """Initialize with database and configuration.
 
         Args:
             db: Database access object.
-            cfg: Application configuration.
+            config: Application configuration.
 
         """
         self._db = db
-        self._cfg = cfg
+        self._config = config
         # Daemon state: lazy-created HTTP session for latency probes (reused for connection keep-alive)
         self._latency_session: aiohttp.ClientSession | None = None
         # Daemon state: last IP result for skipping redundant country lookups
@@ -53,9 +54,9 @@ class Service:
     async def run_probe(self) -> ProbeResult:
         """Run all checks concurrently and return a combined result."""
         latency, vpn, ip_result = await asyncio.gather(
-            check_latency(http_timeout=self._cfg.probed.latency_timeout),
+            check_latency(http_timeout=self._config.probed.latency_timeout),
             asyncio.to_thread(check_vpn),
-            check_ip(http_timeout=self._cfg.probed.ip_timeout),
+            check_ip(http_timeout=self._config.probed.ip_timeout),
         )
         return ProbeResult(
             latency_ms=latency.latency_ms,
@@ -71,7 +72,7 @@ class Service:
 
     async def run_latency_check(self) -> None:
         """Run a single latency probe, log and store the result. Manages HTTP session lifecycle."""
-        cfg = self._cfg.probed
+        cfg = self._config.probed
         if self._latency_session is None:
             self._latency_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=cfg.latency_timeout))
 
@@ -110,7 +111,7 @@ class Service:
         if vpn_changed:
             self._last_ip_result = None
 
-        result = await check_ip(previous=self._last_ip_result, http_timeout=self._cfg.probed.ip_timeout)
+        result = await check_ip(previous=self._last_ip_result, http_timeout=self._config.probed.ip_timeout)
         ts = datetime.now(tz=UTC)
         log.debug("ip=%s, country=%s", result.ip, result.country_code)
         self._db.insert_ip_check(ts, result.ip, result.country_code)

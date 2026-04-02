@@ -1,4 +1,4 @@
-"""Central application entry point."""
+"""Composition root — holds config, database, and service layer."""
 
 from mb_netwatch.config import Config
 from mb_netwatch.core.db import Db
@@ -6,16 +6,19 @@ from mb_netwatch.core.service import Service
 
 
 class Core:
-    """Holds shared resources and services. All consumers access db, config, and business logic through this object."""
+    """Application composition root. Creates and owns all shared resources (database, services)."""
 
-    def __init__(self, db: Db, cfg: Config) -> None:
-        """Initialize core with database and configuration.
+    def __init__(self, config: Config) -> None:
+        """Initialize core with configuration.
 
         Args:
-            db: Database access object.
-            cfg: Application configuration.
+            config: Application configuration.
 
         """
-        self.db = db
-        self.cfg = cfg
-        self.service = Service(db, cfg)
+        self.config = config
+        self.db = Db(config.db_path)
+        self.service = Service(self.db, config)
+
+    def close(self) -> None:
+        """Release resources."""
+        self.db.close()

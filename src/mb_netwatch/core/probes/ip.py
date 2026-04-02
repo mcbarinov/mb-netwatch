@@ -4,9 +4,9 @@ import asyncio
 import ipaddress
 import logging
 import random
-from dataclasses import dataclass
 
 import aiohttp
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +26,10 @@ _IP_COUNTRY_SERVICES: list[str] = [
 """Country resolution URL templates ({ip} is replaced at runtime)."""
 
 
-@dataclass(frozen=True, slots=True)
-class IpResult:
+class IpResult(BaseModel):
     """Public IP detection outcome."""
+
+    model_config = ConfigDict(frozen=True)
 
     ip: str | None
     country_code: str | None

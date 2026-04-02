@@ -40,13 +40,13 @@ class NetwatchTray:
 
     def run(self) -> None:
         """Set up logging, write PID file, start the polling timer and enter the event loop."""
-        setup_logging("mb_netwatch", self._core.cfg.tray_log_path)
-        write_pid_file(self._core.cfg.tray_pid_path)
+        setup_logging("mb_netwatch", self._core.config.tray_log_path)
+        write_pid_file(self._core.config.tray_pid_path)
         try:
-            self._tray.start_timer(self._core.cfg.tray.poll_interval, self._refresh)
+            self._tray.start_timer(self._core.config.tray.poll_interval, self._refresh)
             self._tray.run()
         finally:
-            self._core.cfg.tray_pid_path.unlink(missing_ok=True)
+            self._core.config.tray_pid_path.unlink(missing_ok=True)
             log.info("tray stopped.")
 
     def _refresh(self) -> None:
@@ -110,9 +110,9 @@ class NetwatchTray:
         """Classify latency into a status band label."""
         if latency_ms is None:
             return "\u2715"
-        if latency_ms < self._core.cfg.tray.ok_threshold_ms:
+        if latency_ms < self._core.config.tray.ok_threshold_ms:
             return "\u25cf"
-        if latency_ms < self._core.cfg.tray.slow_threshold_ms:
+        if latency_ms < self._core.config.tray.slow_threshold_ms:
             return "\u25d0"
         return "\u25cb"
 
@@ -120,4 +120,4 @@ class NetwatchTray:
         """Check if the latest latency row is too old to be trusted."""
         if latency is None:
             return False  # no data at all is handled separately (shows "...")
-        return (time.time() - latency.ts) > self._core.cfg.tray.stale_threshold
+        return (time.time() - latency.ts) > self._core.config.tray.stale_threshold

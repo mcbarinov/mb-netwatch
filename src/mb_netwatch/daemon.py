@@ -14,16 +14,16 @@ log = logging.getLogger(__name__)
 
 async def run_daemon(core: Core) -> None:
     """Launch latency, VPN, IP, and purge loops; shut down cleanly on signal."""
-    setup_logging("mb_netwatch", core.cfg.probed_log_path)
+    setup_logging("mb_netwatch", core.config.probed_log_path)
     log.info("probed starting.")
-    write_pid_file(core.cfg.probed_pid_path)
+    write_pid_file(core.config.probed_pid_path)
 
     shutdown = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, shutdown.set)
 
-    cfg = core.cfg.probed
+    cfg = core.config.probed
     core.db.purge_old_latency_checks(cfg.retention_days)
     core.db.purge_old_vpn_checks(cfg.retention_days)
     core.db.purge_old_ip_checks(cfg.retention_days)
@@ -39,7 +39,7 @@ async def run_daemon(core: Core) -> None:
             tg.create_task(_purge_loop(core, shutdown))
     finally:
         await core.service.close_latency_session()
-        core.cfg.probed_pid_path.unlink(missing_ok=True)
+        core.config.probed_pid_path.unlink(missing_ok=True)
         log.info("probed stopped.")
 
 
@@ -64,7 +64,7 @@ async def _latency_loop(core: Core, shutdown: asyncio.Event) -> None:
     """Run latency probes on interval."""
     while not shutdown.is_set():
         await core.service.run_latency_check()
-        await _wait_shutdown(shutdown, core.cfg.probed.latency_interval)
+        await _wait_shutdown(shutdown, core.config.probed.latency_interval)
 
 
 async def _vpn_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
@@ -78,7 +78,7 @@ async def _vpn_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Eve
             ip_trigger.set()
         prev_active = is_active
 
-        await _wait_shutdown(shutdown, core.cfg.probed.vpn_interval)
+        await _wait_shutdown(shutdown, core.config.probed.vpn_interval)
 
 
 async def _ip_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
@@ -90,12 +90,12 @@ async def _ip_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Even
 
         await core.service.run_ip_check(vpn_changed=vpn_changed)
 
-        await _wait_ip(shutdown, ip_trigger, core.cfg.probed.ip_interval)
+        await _wait_ip(shutdown, ip_trigger, core.config.probed.ip_interval)
 
 
 async def _purge_loop(core: Core, shutdown: asyncio.Event) -> None:
     """Purge old data periodically."""
-    cfg = core.cfg.probed
+    cfg = core.config.probed
     while not shutdown.is_set():
         await _wait_shutdown(shutdown, cfg.purge_interval)
         if not shutdown.is_set():

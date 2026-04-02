@@ -4,16 +4,17 @@ import logging
 import re
 import socket
 import subprocess  # nosec B404
-from dataclasses import dataclass
 
 import psutil
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class VpnStatus:
+class VpnStatus(BaseModel):
     """Result of a single VPN detection check."""
+
+    model_config = ConfigDict(frozen=True)
 
     is_active: bool
     tunnel_mode: str  # "full", "split", or "unknown"

@@ -1,24 +1,11 @@
 """SQLite storage for latency, VPN, and IP check results."""
 
 import sqlite3
-from abc import abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Self
 
-from mm_clikit import SqliteDb
-from pydantic import BaseModel
-
-# -- Row types -----------------------------------------------------------------
-
-
-class SqliteRow(BaseModel):
-    """Base class for database row models."""
-
-    @classmethod
-    @abstractmethod
-    def from_row(cls, row: sqlite3.Row) -> Self:
-        """Construct from a sqlite3.Row."""
+from mm_clikit import SqliteDb, SqliteRow
 
 
 class LatencyRow(SqliteRow):

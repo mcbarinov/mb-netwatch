@@ -1,21 +1,13 @@
 """Typed CLI context."""
 
-from dataclasses import dataclass
-
 import typer
+from mm_clikit import CoreContext
+from mm_clikit import use_context as _use_context
 
 from mb_netwatch.cli.output import Output
 from mb_netwatch.core import Core
 
 
-@dataclass(frozen=True, slots=True)
-class CoreContext:
-    """Shared state passed through Typer context to all CLI commands."""
-
-    core: Core
-    out: Output
-
-
-def use_context(ctx: typer.Context) -> CoreContext:
+def use_context(ctx: typer.Context) -> CoreContext[Core, Output]:
     """Extract typed core context from Typer context."""
-    return ctx.obj  # type: ignore[no-any-return]
+    return _use_context(ctx, CoreContext[Core, Output])

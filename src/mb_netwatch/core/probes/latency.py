@@ -3,9 +3,9 @@
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
 
 import aiohttp
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +18,10 @@ _LATENCY_PROBE_URLS: list[str] = [
 """Captive portal detection endpoints used for latency measurement."""
 
 
-@dataclass(frozen=True, slots=True)
-class LatencyResult:
+class LatencyResult(BaseModel):
     """Single latency measurement outcome."""
+
+    model_config = ConfigDict(frozen=True)
 
     latency_ms: float | None
     winner_endpoint: str | None

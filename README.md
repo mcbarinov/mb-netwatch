@@ -195,4 +195,5 @@ mb-netwatch start
 - Python 3.14
 - [aiohttp](https://docs.aiohttp.org/) — HTTP probes
 - [psutil](https://github.com/giampaolo/psutil) — network interface inspection for VPN detection
+- [mm-clikit](https://github.com/mcbarinov/mm-clikit) — CLI toolkit (Typer enhancements, SQLite, process management)
 - [mm-pymac](https://github.com/mcbarinov/mm-pymac) — macOS menu bar app

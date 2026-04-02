@@ -382,7 +382,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "~=3.13.5" },
-    { name = "mm-clikit", specifier = "~=0.0.18" },
+    { name = "mm-clikit", specifier = "~=0.0.19" },
     { name = "mm-pymac", specifier = "~=0.0.3" },
     { name = "psutil", specifier = "~=7.0" },
 ]
@@ -409,7 +409,7 @@ wheels = [
 
 [[package]]
 name = "mm-clikit"
-version = "0.0.18"
+version = "0.0.19"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mm-result" },
@@ -420,9 +420,9 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/44/ca311a742833b324ebc98b3a09d55bf76325fecf6b0b3001f1cca0068eef/mm_clikit-0.0.18.tar.gz", hash = "sha256:e7af98b822e325c1d7f419247eb7dc7a8c7ba6c50daa4a939c061b980249aae8", size = 66035, upload-time = "2026-03-31T09:31:32.058Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/71/f8d76de0389d016a2e3825917c9de086d4bf16c98fc207088189631a146d/mm_clikit-0.0.19.tar.gz", hash = "sha256:8e3777e72c06215412e14b5395e8e1d8f7eb8f5f0bd59dae220767c822a3d278", size = 68415, upload-time = "2026-04-01T11:24:49.564Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/df/6837cb3c751fb519b498b34465782983515d2bf06c327be5c153f8f82d37/mm_clikit-0.0.18-py3-none-any.whl", hash = "sha256:bbf3f5987e84d6428d69517caf2f2f9909dc3e69d3ec86a95bd0e7aedba9fa9e", size = 17194, upload-time = "2026-03-31T09:31:30.681Z" },
+    { url = "https://files.pythonhosted.org/packages/89/c8/56b095b9b2ba04a9fa576f031dc9ff59cddc21a3a9880c1b1fc1d8eaa347/mm_clikit-0.0.19-py3-none-any.whl", hash = "sha256:b028462c54e0b6f0185dd9d56e78545b154dcbd1de185ab7d7c93a1265907c9b", size = 17458, upload-time = "2026-04-01T11:24:48.18Z" },
 ]
 
 [[package]]
@@ -1044,11 +1044,11 @@ wheels = [
 
 [[package]]
 name = "types-psutil"
-version = "7.2.2.20260130"
+version = "7.2.2.20260402"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/69/14/fc5fb0a6ddfadf68c27e254a02ececd4d5c7fdb0efcb7e7e917a183497fb/types_psutil-7.2.2.20260130.tar.gz", hash = "sha256:15b0ab69c52841cf9ce3c383e8480c620a4d13d6a8e22b16978ebddac5590950", size = 26535, upload-time = "2026-01-30T03:58:14.116Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/a2/a608db0caf0d71bd231305dc3ab3f5d65624d77761003696a3ca8c6fad40/types_psutil-7.2.2.20260402.tar.gz", hash = "sha256:9f36eebf15ad8487f8004ed67c8e008b84b63ba00cfb709a3f60275058217329", size = 26522, upload-time = "2026-04-02T04:18:47.916Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/d7/60974b7e31545d3768d1770c5fe6e093182c3bfd819429b33133ba6b3e89/types_psutil-7.2.2.20260130-py3-none-any.whl", hash = "sha256:15523a3caa7b3ff03ac7f9b78a6470a59f88f48df1d74a39e70e06d2a99107da", size = 32876, upload-time = "2026-01-30T03:58:13.172Z" },
+    { url = "https://files.pythonhosted.org/packages/81/8a/f4b3ca3154e8a77df91eb7a28c208af721d48f8a4aca667f582523a0beff/types_psutil-7.2.2.20260402-py3-none-any.whl", hash = "sha256:653d1fd908e68cc0666754b16a0cee28efbded0c401caa5314d2aeea67f227cd", size = 32860, upload-time = "2026-04-02T04:18:46.671Z" },
 ]
 
 [[package]]

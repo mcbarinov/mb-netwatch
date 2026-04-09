@@ -16,10 +16,10 @@ See [docs/probes.md](docs/probes.md) for detailed algorithms, endpoints, and des
 
 ## CLI commands
 
+- `mb-netwatch` — TUI dashboard (default when no command given)
 - `mb-netwatch probe` — one-shot connectivity probe, print result
 - `mb-netwatch probed` — run continuous background measurements
 - `mb-netwatch tray` — run menu bar UI process
-- `mb-netwatch watch` — live terminal view of measurements
 - `mb-netwatch start [probed|tray]` — start processes in the background (no argument = both)
 - `mb-netwatch stop [probed|tray]` — stop background processes (no argument = both)
 
@@ -40,6 +40,7 @@ Central application layer. Holds database, business logic, and probe implementat
 Three independent consumers of `Core`:
 
 - **CLI** (`cli/`) — command-line interface. Each command receives `Core` and `Output` via `CoreContext`.
+- **TUI** (`tui/`) — Textual terminal dashboard. Polls `core.db` for latest results and renders a live view with latency sparkline, VPN/IP status, and recent events.
 - **Daemon** (`daemon.py`) — long-running background process. Orchestrates scheduling (loops, timers, signals) and delegates all probe/store logic to `core.service`.
 - **Tray** (`tray.py`) — macOS menu bar UI. Polls `core.db` for latest results and updates the icon.
 
@@ -77,8 +78,9 @@ ok_threshold_ms = 300    # latency below this → OK (default: 300)
 slow_threshold_ms = 800  # latency below this → SLOW, at or above → BAD (default: 800)
 stale_threshold = 10.0   # seconds before data is considered stale (default: 10.0)
 
-[watch]
-poll_interval = 0.5      # seconds between terminal view DB polls (default: 0.5)
+[tui]
+poll_interval = 0.5      # seconds between TUI dashboard DB polls (default: 0.5)
+history_size = 60        # number of latency readings in sparkline (default: 60)
 ```
 
 The menu bar shows a fixed-width 3-character title: 2-letter country code + status symbol (`●` OK / `◐` SLOW / `○` BAD / `✕` DOWN), e.g. `US●`. Click the menu bar icon to see the exact latency in the dropdown. If probed stops writing data, the symbol changes to `–` (en dash) after `stale_threshold` seconds (default 10). While waiting for the first data, a middle dot `·` is displayed.

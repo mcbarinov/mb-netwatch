@@ -8,20 +8,6 @@ from pydantic import BaseModel, ConfigDict
 from mb_netwatch.core.service import ProbeResult
 
 
-class WatchRow(BaseModel):
-    """Single measurement row for the watch stream."""
-
-    model_config = ConfigDict(frozen=True)
-
-    ts: str  # Local ISO 8601 timestamp
-    latency_ms: float | None  # Round-trip time in milliseconds; None when down
-    vpn_active: bool  # Whether VPN tunnel is active
-    tunnel_mode: str  # "full", "split", or "unknown"
-    vpn_provider: str | None  # VPN app name; None when not identified
-    ip: str | None  # Public IPv4 address; None when lookup failed
-    country_code: str | None  # 2-letter ISO country code; None when lookup failed
-
-
 class StartStopResult(BaseModel):
     """Result of a start/stop command."""
 
@@ -64,10 +50,6 @@ class Output(DualModeOutput):
             lines.append(f"IP: {result.ip}")
 
         self.output(json_data=result.model_dump(), display_data="\n".join(lines))
-
-    def print_watch_row(self, row: WatchRow, formatted_line: str) -> None:
-        """Print a single watch row in JSON or human-readable format."""
-        self.output(json_data=row.model_dump(), display_data=formatted_line)
 
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""

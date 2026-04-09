@@ -107,13 +107,13 @@ class Db(SqliteDb):
         ).fetchone()
         return ProbeLatency.from_row(row) if row else None
 
-    def fetch_probe_latency_since(self, since_ts: float) -> list[ProbeLatency]:
-        """Return all latency probes with created_at > since_ts, ordered ascending."""
+    def fetch_recent_probe_latency(self, limit: int) -> list[ProbeLatency]:
+        """Return the last *limit* latency probes, ordered oldest-first (for sparkline)."""
         rows = self.conn.execute(
-            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency WHERE created_at > ? ORDER BY created_at ASC",
-            (since_ts,),
+            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
-        return [ProbeLatency.from_row(r) for r in rows]
+        return [ProbeLatency.from_row(r) for r in reversed(rows)]
 
     def purge_old_probe_latency(self, retention_days: int) -> int:
         """Delete latency probes older than *retention_days*. Return rows deleted."""
@@ -151,12 +151,11 @@ class Db(SqliteDb):
         ).fetchone()
         return ProbeVpn.from_row(row) if row else None
 
-    def fetch_probe_vpn_since(self, since_ts: float) -> list[ProbeVpn]:
-        """Return VPN state changes with created_at > since_ts, ordered ascending."""
+    def fetch_recent_probe_vpn(self, limit: int) -> list[ProbeVpn]:
+        """Return the last *limit* VPN state changes, ordered newest-first."""
         rows = self.conn.execute(
-            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM probe_vpn"
-            " WHERE created_at > ? ORDER BY created_at ASC",
-            (since_ts,),
+            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM probe_vpn ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [ProbeVpn.from_row(r) for r in rows]
 
@@ -189,11 +188,11 @@ class Db(SqliteDb):
         ).fetchone()
         return ProbeIp.from_row(row) if row else None
 
-    def fetch_probe_ip_since(self, since_ts: float) -> list[ProbeIp]:
-        """Return IP state changes with created_at > since_ts, ordered ascending."""
+    def fetch_recent_probe_ip(self, limit: int) -> list[ProbeIp]:
+        """Return the last *limit* IP state changes, ordered newest-first."""
         rows = self.conn.execute(
-            "SELECT created_at, updated_at, ip, country_code FROM probe_ip WHERE created_at > ? ORDER BY created_at ASC",
-            (since_ts,),
+            "SELECT created_at, updated_at, ip, country_code FROM probe_ip ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [ProbeIp.from_row(r) for r in rows]
 

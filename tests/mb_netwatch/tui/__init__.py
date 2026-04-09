@@ -1,0 +1,1 @@
+"""TUI adapter tests."""

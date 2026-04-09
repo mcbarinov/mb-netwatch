@@ -47,20 +47,20 @@ class TestProbeLatency:
         assert row.latency_ms == pytest.approx(300.0)
         assert row.winner_endpoint == "c"
 
-    def test_fetch_since(self, db):
-        """fetch_since returns only rows newer than the threshold, ascending."""
+    def test_fetch_recent(self, db):
+        """fetch_recent returns last N rows oldest-first."""
         now = datetime.now(tz=UTC)
-        t1 = now - timedelta(seconds=30)
-        t2 = now - timedelta(seconds=20)
-        t3 = now - timedelta(seconds=10)
-        db.insert_probe_latency(t1, 10.0, "a")
-        db.insert_probe_latency(t2, 20.0, "b")
-        db.insert_probe_latency(t3, 30.0, "c")
-
-        rows = db.fetch_probe_latency_since(t1.timestamp())
-        assert len(rows) == 2
+        for i in range(5):
+            db.insert_probe_latency(now - timedelta(seconds=10 - i * 2), float(i * 10), f"e{i}")
+        rows = db.fetch_recent_probe_latency(3)
+        assert len(rows) == 3
         assert rows[0].latency_ms == pytest.approx(20.0)
-        assert rows[1].latency_ms == pytest.approx(30.0)
+        assert rows[2].latency_ms == pytest.approx(40.0)
+        assert rows[0].created_at < rows[1].created_at < rows[2].created_at
+
+    def test_fetch_recent_empty(self, db):
+        """fetch_recent on empty table returns empty list."""
+        assert db.fetch_recent_probe_latency(10) == []
 
     def test_purge_old(self, db):
         """Purge deletes old rows and keeps recent ones."""
@@ -71,7 +71,7 @@ class TestProbeLatency:
 
         deleted = db.purge_old_probe_latency(retention_days=30)
         assert deleted == 1
-        rows = db.fetch_probe_latency_since(0.0)
+        rows = db.fetch_recent_probe_latency(100)
         assert len(rows) == 1
         assert rows[0].winner_endpoint == "recent"
 
@@ -110,7 +110,7 @@ class TestProbeVpn:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_vpn(t1, True, "full", "WireGuard")
         db.upsert_probe_vpn(t2, True, "full", "WireGuard")
-        rows = db.fetch_probe_vpn_since(0.0)
+        rows = db.fetch_recent_probe_vpn(100)
         assert len(rows) == 1
         assert rows[0].created_at == pytest.approx(t1.timestamp())
         assert rows[0].updated_at == pytest.approx(t2.timestamp())
@@ -121,7 +121,7 @@ class TestProbeVpn:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_vpn(t1, True, "full", None)
         db.upsert_probe_vpn(t2, False, "split", None)
-        rows = db.fetch_probe_vpn_since(0.0)
+        rows = db.fetch_recent_probe_vpn(100)
         assert len(rows) == 2
 
     def test_is_active_bool_conversion(self, db):
@@ -135,26 +135,25 @@ class TestProbeVpn:
         assert latest.is_active is False
         assert isinstance(latest.is_active, bool)
 
-        rows = db.fetch_probe_vpn_since(0.0)
-        assert rows[0].is_active is True
-        assert isinstance(rows[0].is_active, bool)
+        rows = db.fetch_recent_probe_vpn(100)
+        # newest-first, so rows[1] is the older (active) row
+        assert rows[1].is_active is True
+        assert isinstance(rows[1].is_active, bool)
 
     def test_fetch_latest_empty(self, db):
         """Empty table returns None."""
         assert db.fetch_latest_probe_vpn() is None
 
-    def test_fetch_since(self, db):
-        """fetch_since returns only state changes after the cursor."""
+    def test_fetch_recent(self, db):
+        """fetch_recent returns last N state changes newest-first."""
         now = datetime.now(tz=UTC)
-        t1 = now - timedelta(seconds=20)
-        t2 = now - timedelta(seconds=10)
-        db.upsert_probe_vpn(t1, True, "full", None)
-        db.upsert_probe_vpn(t2, False, "split", "NordVPN")
-
-        rows = db.fetch_probe_vpn_since(t1.timestamp())
-        assert len(rows) == 1
-        assert rows[0].tunnel_mode == "split"
+        db.upsert_probe_vpn(now - timedelta(seconds=30), True, "full", None)
+        db.upsert_probe_vpn(now - timedelta(seconds=20), False, "split", None)
+        db.upsert_probe_vpn(now - timedelta(seconds=10), True, "full", "NordVPN")
+        rows = db.fetch_recent_probe_vpn(2)
+        assert len(rows) == 2
         assert rows[0].provider == "NordVPN"
+        assert rows[1].tunnel_mode == "split"
 
     def test_purge_old(self, db):
         """Purge deletes rows not confirmed recently, keeps recent."""
@@ -165,7 +164,7 @@ class TestProbeVpn:
 
         deleted = db.purge_old_probe_vpn(retention_days=30)
         assert deleted == 1
-        rows = db.fetch_probe_vpn_since(0.0)
+        rows = db.fetch_recent_probe_vpn(100)
         assert len(rows) == 1
         assert rows[0].is_active is False
 
@@ -203,7 +202,7 @@ class TestProbeIp:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_ip(t1, "1.2.3.4", "US")
         db.upsert_probe_ip(t2, "1.2.3.4", "US")
-        rows = db.fetch_probe_ip_since(0.0)
+        rows = db.fetch_recent_probe_ip(100)
         assert len(rows) == 1
         assert rows[0].created_at == pytest.approx(t1.timestamp())
         assert rows[0].updated_at == pytest.approx(t2.timestamp())
@@ -214,7 +213,7 @@ class TestProbeIp:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_ip(t1, "1.1.1.1", "US")
         db.upsert_probe_ip(t2, "2.2.2.2", "DE")
-        rows = db.fetch_probe_ip_since(0.0)
+        rows = db.fetch_recent_probe_ip(100)
         assert len(rows) == 2
 
     def test_upsert_country_change_creates_new_row(self, db):
@@ -223,7 +222,7 @@ class TestProbeIp:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_ip(t1, "1.1.1.1", "US")
         db.upsert_probe_ip(t2, "1.1.1.1", "DE")
-        rows = db.fetch_probe_ip_since(0.0)
+        rows = db.fetch_recent_probe_ip(100)
         assert len(rows) == 2
 
     def test_upsert_null_dedup(self, db):
@@ -232,7 +231,7 @@ class TestProbeIp:
         t2 = datetime.now(tz=UTC)
         db.upsert_probe_ip(t1, None, None)
         db.upsert_probe_ip(t2, None, None)
-        rows = db.fetch_probe_ip_since(0.0)
+        rows = db.fetch_recent_probe_ip(100)
         assert len(rows) == 1
         assert rows[0].ip is None
         assert rows[0].country_code is None
@@ -241,18 +240,16 @@ class TestProbeIp:
         """Empty table returns None."""
         assert db.fetch_latest_probe_ip() is None
 
-    def test_fetch_since(self, db):
-        """fetch_since returns only IP changes after the cursor."""
+    def test_fetch_recent(self, db):
+        """fetch_recent returns last N IP state changes newest-first."""
         now = datetime.now(tz=UTC)
-        t1 = now - timedelta(seconds=20)
-        t2 = now - timedelta(seconds=10)
-        db.upsert_probe_ip(t1, "1.1.1.1", "US")
-        db.upsert_probe_ip(t2, "2.2.2.2", "DE")
-
-        rows = db.fetch_probe_ip_since(t1.timestamp())
-        assert len(rows) == 1
-        assert rows[0].ip == "2.2.2.2"
-        assert rows[0].country_code == "DE"
+        db.upsert_probe_ip(now - timedelta(seconds=30), "1.1.1.1", "US")
+        db.upsert_probe_ip(now - timedelta(seconds=20), "2.2.2.2", "DE")
+        db.upsert_probe_ip(now - timedelta(seconds=10), "3.3.3.3", "FR")
+        rows = db.fetch_recent_probe_ip(2)
+        assert len(rows) == 2
+        assert rows[0].ip == "3.3.3.3"
+        assert rows[1].ip == "2.2.2.2"
 
     def test_purge_old(self, db):
         """Purge deletes rows not confirmed recently, keeps recent."""
@@ -263,7 +260,7 @@ class TestProbeIp:
 
         deleted = db.purge_old_probe_ip(retention_days=30)
         assert deleted == 1
-        rows = db.fetch_probe_ip_since(0.0)
+        rows = db.fetch_recent_probe_ip(100)
         assert len(rows) == 1
         assert rows[0].ip == "2.2.2.2"
 

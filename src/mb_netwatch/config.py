@@ -63,17 +63,19 @@ class _TrayConfig(BaseModel):
         return self
 
 
-class _WatchConfig(BaseModel):
-    """Settings for the live terminal view.
+class _TuiConfig(BaseModel):
+    """Settings for the TUI dashboard.
 
     Args:
-        poll_interval: seconds between terminal view DB polls.
+        poll_interval: seconds between TUI DB polls.
+        history_size: number of latency readings in sparkline.
 
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     poll_interval: float = Field(default=0.5, gt=0)
+    history_size: int = Field(default=60, gt=0)
 
 
 class Config(BaseModel):
@@ -83,7 +85,7 @@ class Config(BaseModel):
         data_dir: base directory for all application data (DB, config, PID files, logs).
         probed: background measurement daemon settings.
         tray: menu bar UI settings.
-        watch: live terminal view settings.
+        tui: TUI dashboard settings.
 
     """
 
@@ -92,7 +94,7 @@ class Config(BaseModel):
     data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Base directory for all application data")
     probed: _ProbedConfig = Field(default_factory=_ProbedConfig)
     tray: _TrayConfig = Field(default_factory=_TrayConfig)
-    watch: _WatchConfig = Field(default_factory=_WatchConfig)
+    tui: _TuiConfig = Field(default_factory=_TuiConfig)
 
     @computed_field
     @cached_property
@@ -161,14 +163,14 @@ class Config(BaseModel):
             with config_path.open("rb") as f:
                 data = tomllib.load(f)
 
-            known_sections = frozenset({"probed", "tray", "watch"})
+            known_sections = frozenset({"probed", "tray", "tui"})
             unknown = set(data.keys()) - known_sections
             if unknown:
                 raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
 
             kwargs["probed"] = _ProbedConfig(**data.get("probed", {}))
             kwargs["tray"] = _TrayConfig(**data.get("tray", {}))
-            kwargs["watch"] = _WatchConfig(**data.get("watch", {}))
+            kwargs["tui"] = _TuiConfig(**data.get("tui", {}))
 
         cfg = Config(**kwargs)
         cfg.data_dir.mkdir(parents=True, exist_ok=True)

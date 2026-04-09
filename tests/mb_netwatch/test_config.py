@@ -30,10 +30,11 @@ class TestDefaults:
         assert cfg.tray.slow_threshold_ms == 800
         assert cfg.tray.stale_threshold == 10.0
 
-    def test_default_watch(self):
-        """Default watch poll interval."""
+    def test_default_tui(self):
+        """Default TUI settings."""
         cfg = Config()
-        assert cfg.watch.poll_interval == 0.5
+        assert cfg.tui.poll_interval == 0.5
+        assert cfg.tui.history_size == 60
 
     def test_computed_paths(self):
         """Computed paths resolve relative to data_dir."""
@@ -88,7 +89,7 @@ class TestFieldValidation:
             ("tray", "ok_threshold_ms", 0),
             ("tray", "slow_threshold_ms", 0),
             ("tray", "stale_threshold", -1),
-            ("watch", "poll_interval", 0),
+            ("tui", "poll_interval", 0),
         ],
     )
     def test_zero_and_negative_values_rejected(self, section, field, value):
@@ -96,7 +97,7 @@ class TestFieldValidation:
         with pytest.raises(ValidationError):
             Config(**{section: {field: value}})
 
-    @pytest.mark.parametrize("section", ["probed", "tray", "watch"])
+    @pytest.mark.parametrize("section", ["probed", "tray", "tui"])
     def test_extra_fields_forbidden(self, section):
         """Unknown keys within a known section raise ValidationError."""
         with pytest.raises(ValidationError):

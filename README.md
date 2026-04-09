@@ -25,7 +25,7 @@ See [docs/probes.md](docs/probes.md) for detailed algorithms, endpoints, and des
 
 ## Architecture
 
-General CLI application architecture patterns are described in [docs/cli-architecture.md](docs/cli-architecture.md). Below is the project-specific structure.
+General CLI application architecture patterns are described in [docs/cli-architecture.md](docs/cli-architecture.md). Database schema and storage rules are in [docs/db.md](docs/db.md). Below is the project-specific structure.
 
 ### Core (`core/`)
 
@@ -54,36 +54,8 @@ The tray must not perform network probing directly. This separation keeps UI res
 
 ## Storage
 
-SQLite database at `~/.local/mb-netwatch/netwatch.db`.
-Journal mode: WAL (concurrent reads while probed writes).
-
-### Schema
-
-```sql
-CREATE TABLE latency_checks (
-    ts               REAL  NOT NULL,  -- UTC Unix timestamp (seconds since epoch)
-    latency_ms       REAL,            -- winning request latency; NULL when all endpoints failed
-    winner_endpoint  TEXT              -- URL that responded first; NULL when down
-);
-CREATE INDEX idx_latency_checks_ts ON latency_checks(ts);
-
-CREATE TABLE vpn_checks (
-    ts            REAL     NOT NULL,  -- UTC Unix timestamp (seconds since epoch)
-    is_active     INTEGER  NOT NULL,  -- 1 = VPN active, 0 = inactive
-    tunnel_mode   TEXT     NOT NULL,  -- "full", "split", or "unknown"
-    provider      TEXT                -- VPN app name, NULL when not identified reliably
-);
-CREATE INDEX idx_vpn_checks_ts ON vpn_checks(ts);
-
-CREATE TABLE ip_checks (
-    ts            REAL  NOT NULL,  -- UTC Unix timestamp (seconds since epoch)
-    ip            TEXT,            -- public IPv4 address; NULL when all lookups failed
-    country_code  TEXT             -- 2-letter ISO country code; NULL when lookup failed
-);
-CREATE INDEX idx_ip_checks_ts ON ip_checks(ts);
-```
-
-Retention: raw rows kept for 30 days, older rows purged periodically by probed.
+SQLite database at `~/.local/mb-netwatch/netwatch.db` (WAL mode).
+See [docs/db.md](docs/db.md) for schema, deduplication strategy, and retention rules.
 
 ## Configuration
 

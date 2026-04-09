@@ -67,22 +67,22 @@ def _poll_loop(app: CoreContext[Core, Output]) -> None:
 
     # Load latest VPN and IP status
     cached_vpn = app.core.db.fetch_latest_vpn_check()
-    vpn_cursor_ts = cached_vpn.ts if cached_vpn else 0.0
+    vpn_cursor_ts = cached_vpn.created_at if cached_vpn else 0.0
     cached_ip = app.core.db.fetch_latest_ip_check()
-    ip_cursor_ts = cached_ip.ts if cached_ip else 0.0
+    ip_cursor_ts = cached_ip.created_at if cached_ip else 0.0
 
     while True:
         # Check for newer VPN data
         vpn_rows = app.core.db.fetch_vpn_checks_since(vpn_cursor_ts)
         if vpn_rows:
             cached_vpn = vpn_rows[-1]
-            vpn_cursor_ts = cached_vpn.ts
+            vpn_cursor_ts = cached_vpn.created_at
 
         # Check for newer IP data
         ip_rows = app.core.db.fetch_ip_checks_since(ip_cursor_ts)
         if ip_rows:
             cached_ip = ip_rows[-1]
-            ip_cursor_ts = cached_ip.ts
+            ip_cursor_ts = cached_ip.created_at
 
         # Print new latency rows with cached VPN and IP status
         rows = app.core.db.fetch_latency_checks_since(latency_cursor_ts)

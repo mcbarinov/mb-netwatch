@@ -15,17 +15,17 @@ class TestFormatVpn:
 
     def test_inactive(self):
         """Inactive VPN shows off."""
-        vpn = VpnCheckRow(ts=0.0, is_active=False, tunnel_mode="full", provider=None)
+        vpn = VpnCheckRow(created_at=0.0, updated_at=0.0, is_active=False, tunnel_mode="full", provider=None)
         assert _format_vpn(vpn) == "VPN:off"
 
     def test_active_no_provider(self):
         """Active VPN without provider shows tunnel mode."""
-        vpn = VpnCheckRow(ts=0.0, is_active=True, tunnel_mode="full", provider=None)
+        vpn = VpnCheckRow(created_at=0.0, updated_at=0.0, is_active=True, tunnel_mode="full", provider=None)
         assert _format_vpn(vpn) == "VPN:on full"
 
     def test_active_with_provider(self):
         """Active VPN with provider shows provider and tunnel mode."""
-        vpn = VpnCheckRow(ts=0.0, is_active=True, tunnel_mode="split", provider="NordVPN")
+        vpn = VpnCheckRow(created_at=0.0, updated_at=0.0, is_active=True, tunnel_mode="split", provider="NordVPN")
         assert _format_vpn(vpn) == "VPN:on NordVPN split"
 
 
@@ -38,17 +38,17 @@ class TestFormatIp:
 
     def test_null_ip(self):
         """Row with ip=None produces question mark."""
-        ip = IpCheckRow(ts=0.0, ip=None, country_code=None)
+        ip = IpCheckRow(created_at=0.0, updated_at=0.0, ip=None, country_code=None)
         assert _format_ip(ip) == "IP:?"
 
     def test_ip_no_country(self):
         """IP without country shows just the address."""
-        ip = IpCheckRow(ts=0.0, ip="1.2.3.4", country_code=None)
+        ip = IpCheckRow(created_at=0.0, updated_at=0.0, ip="1.2.3.4", country_code=None)
         assert _format_ip(ip) == "IP:1.2.3.4"
 
     def test_ip_with_country(self):
         """IP with country shows address and country in parens."""
-        ip = IpCheckRow(ts=0.0, ip="1.2.3.4", country_code="US")
+        ip = IpCheckRow(created_at=0.0, updated_at=0.0, ip="1.2.3.4", country_code="US")
         assert _format_ip(ip) == "IP:1.2.3.4(US)"
 
 
@@ -75,8 +75,8 @@ class TestFormatRow:
         """Combines latency, VPN, and IP strings."""
         ts = time.time()
         row = LatencyRow(ts=ts, latency_ms=100.0, winner_endpoint="x")
-        vpn = VpnCheckRow(ts=0.0, is_active=True, tunnel_mode="full", provider="WG")
-        ip = IpCheckRow(ts=0.0, ip="5.6.7.8", country_code="DE")
+        vpn = VpnCheckRow(created_at=0.0, updated_at=0.0, is_active=True, tunnel_mode="full", provider="WG")
+        ip = IpCheckRow(created_at=0.0, updated_at=0.0, ip="5.6.7.8", country_code="DE")
         result = _format_row(row, vpn, ip)
         assert "100ms" in result
         assert "VPN:on WG full" in result

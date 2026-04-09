@@ -92,7 +92,7 @@ class Service:
         status = await asyncio.to_thread(check_vpn)
         ts = datetime.now(tz=UTC)
         log.debug("vpn=%s, mode=%s, provider=%s", status.is_active, status.tunnel_mode, status.provider)
-        self._db.insert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
+        self._db.upsert_vpn_check(ts, status.is_active, status.tunnel_mode, status.provider)
         return status.is_active
 
     async def run_ip_check(self, *, vpn_changed: bool = False) -> None:
@@ -114,7 +114,7 @@ class Service:
         result = await check_ip(previous=self._last_ip_result, http_timeout=self._config.probed.ip_timeout)
         ts = datetime.now(tz=UTC)
         log.debug("ip=%s, country=%s", result.ip, result.country_code)
-        self._db.insert_ip_check(ts, result.ip, result.country_code)
+        self._db.upsert_ip_check(ts, result.ip, result.country_code)
         self._last_ip_result = result
 
     async def close_latency_session(self) -> None:

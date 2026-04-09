@@ -110,9 +110,9 @@ class NetwatchTray:
         """Classify latency into a status band label."""
         if latency_ms is None:
             return "\u2715"
-        if latency_ms < self._core.config.tray.ok_threshold_ms:
+        if latency_ms < self._core.config.latency_threshold.ok_ms:
             return "\u25cf"
-        if latency_ms < self._core.config.tray.slow_threshold_ms:
+        if latency_ms < self._core.config.latency_threshold.slow_ms:
             return "\u25d0"
         return "\u25cb"
 
@@ -120,4 +120,4 @@ class NetwatchTray:
         """Check if the latest latency row is too old to be trusted."""
         if latency is None:
             return False  # no data at all is handled separately (shows "...")
-        return (time.time() - latency.created_at) > self._core.config.tray.stale_threshold
+        return (time.time() - latency.created_at) > self._core.config.latency_threshold.stale_seconds

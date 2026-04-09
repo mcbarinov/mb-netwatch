@@ -12,7 +12,7 @@ DEFAULT_DATA_DIR = Path.home() / ".local" / "mb-netwatch"
 """Fallback data directory when neither --data-dir nor env var is set."""
 
 
-class _ProbedConfig(BaseModel):
+class ProbedConfig(BaseModel):
     """Settings for the background measurement daemon.
 
     Args:
@@ -37,45 +37,57 @@ class _ProbedConfig(BaseModel):
     retention_days: int = Field(default=30, gt=0)
 
 
-class _TrayConfig(BaseModel):
+class LatencyThresholdConfig(BaseModel):
+    """Latency classification thresholds shared by all display consumers (tray, TUI).
+
+    Args:
+        ok_ms: latency below this is OK (milliseconds).
+        slow_ms: latency below this is SLOW, at or above is BAD (milliseconds).
+        stale_seconds: seconds since last latency row before data is considered stale.
+
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ok_ms: int = Field(default=300, gt=0)
+    slow_ms: int = Field(default=800, gt=0)
+    stale_seconds: float = Field(default=10.0, gt=0)
+
+    @model_validator(mode="after")
+    def _check_threshold_ordering(self) -> Self:
+        if self.ok_ms >= self.slow_ms:
+            raise ValueError(
+                f"latency_threshold.ok_ms ({self.ok_ms}) must be less than latency_threshold.slow_ms ({self.slow_ms})"
+            )
+        return self
+
+
+class TrayConfig(BaseModel):
     """Settings for the menu bar UI process.
 
     Args:
         poll_interval: seconds between tray DB polls for fresh data.
-        ok_threshold_ms: latency below this is OK (milliseconds).
-        slow_threshold_ms: latency below this is SLOW, at or above is BAD (milliseconds).
-        stale_threshold: seconds since last latency row before data is considered stale.
 
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     poll_interval: float = Field(default=2.0, gt=0)
-    ok_threshold_ms: int = Field(default=300, gt=0)
-    slow_threshold_ms: int = Field(default=800, gt=0)
-    stale_threshold: float = Field(default=10.0, gt=0)
-
-    @model_validator(mode="after")
-    def _check_threshold_ordering(self) -> Self:
-        if self.ok_threshold_ms >= self.slow_threshold_ms:
-            ok, slow = self.ok_threshold_ms, self.slow_threshold_ms
-            raise ValueError(f"tray.ok_threshold_ms ({ok}) must be less than tray.slow_threshold_ms ({slow})")
-        return self
 
 
-class _TuiConfig(BaseModel):
+class TuiConfig(BaseModel):
     """Settings for the TUI dashboard.
 
     Args:
         poll_interval: seconds between TUI DB polls.
-        history_size: number of latency readings in sparkline.
+        latency_history_size: number of latency readings in sparkline.
 
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     poll_interval: float = Field(default=0.5, gt=0)
-    history_size: int = Field(default=60, gt=0)
+    latency_history_size: int = Field(default=60, gt=0)
 
 
 class Config(BaseModel):
@@ -84,6 +96,7 @@ class Config(BaseModel):
     Args:
         data_dir: base directory for all application data (DB, config, PID files, logs).
         probed: background measurement daemon settings.
+        latency_threshold: latency classification thresholds for display.
         tray: menu bar UI settings.
         tui: TUI dashboard settings.
 
@@ -92,9 +105,10 @@ class Config(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Base directory for all application data")
-    probed: _ProbedConfig = Field(default_factory=_ProbedConfig)
-    tray: _TrayConfig = Field(default_factory=_TrayConfig)
-    tui: _TuiConfig = Field(default_factory=_TuiConfig)
+    probed: ProbedConfig = Field(default_factory=ProbedConfig)
+    latency_threshold: LatencyThresholdConfig = Field(default_factory=LatencyThresholdConfig)
+    tray: TrayConfig = Field(default_factory=TrayConfig)
+    tui: TuiConfig = Field(default_factory=TuiConfig)
 
     @computed_field
     @cached_property
@@ -163,14 +177,15 @@ class Config(BaseModel):
             with config_path.open("rb") as f:
                 data = tomllib.load(f)
 
-            known_sections = frozenset({"probed", "tray", "tui"})
+            known_sections = frozenset({"probed", "latency_threshold", "tray", "tui"})
             unknown = set(data.keys()) - known_sections
             if unknown:
                 raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
 
-            kwargs["probed"] = _ProbedConfig(**data.get("probed", {}))
-            kwargs["tray"] = _TrayConfig(**data.get("tray", {}))
-            kwargs["tui"] = _TuiConfig(**data.get("tui", {}))
+            kwargs["probed"] = ProbedConfig(**data.get("probed", {}))
+            kwargs["latency_threshold"] = LatencyThresholdConfig(**data.get("latency_threshold", {}))
+            kwargs["tray"] = TrayConfig(**data.get("tray", {}))
+            kwargs["tui"] = TuiConfig(**data.get("tui", {}))
 
         cfg = Config(**kwargs)
         cfg.data_dir.mkdir(parents=True, exist_ok=True)

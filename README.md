@@ -72,18 +72,20 @@ latency_timeout = 5.0    # HTTP timeout for latency probes (default: 5.0)
 ip_timeout = 5.0         # HTTP timeout for IP/country lookups (default: 5.0)
 retention_days = 30      # days to keep raw rows before purging (default: 30)
 
+[latency_threshold]
+ok_ms = 300              # latency below this → OK (default: 300)
+slow_ms = 800            # latency below this → SLOW, at or above → BAD (default: 800)
+stale_seconds = 10.0     # seconds before data is considered stale (default: 10.0)
+
 [tray]
 poll_interval = 2.0      # seconds between tray DB polls (default: 2.0)
-ok_threshold_ms = 300    # latency below this → OK (default: 300)
-slow_threshold_ms = 800  # latency below this → SLOW, at or above → BAD (default: 800)
-stale_threshold = 10.0   # seconds before data is considered stale (default: 10.0)
 
 [tui]
 poll_interval = 0.5      # seconds between TUI dashboard DB polls (default: 0.5)
-history_size = 60        # number of latency readings in sparkline (default: 60)
+latency_history_size = 60  # number of latency readings in sparkline (default: 60)
 ```
 
-The menu bar shows a fixed-width 3-character title: 2-letter country code + status symbol (`●` OK / `◐` SLOW / `○` BAD / `✕` DOWN), e.g. `US●`. Click the menu bar icon to see the exact latency in the dropdown. If probed stops writing data, the symbol changes to `–` (en dash) after `stale_threshold` seconds (default 10). While waiting for the first data, a middle dot `·` is displayed.
+The menu bar shows a fixed-width 3-character title: 2-letter country code + status symbol (`●` OK / `◐` SLOW / `○` BAD / `✕` DOWN), e.g. `US●`. Click the menu bar icon to see the exact latency in the dropdown. If probed stops writing data, the symbol changes to `–` (en dash) after `stale_seconds` seconds (default 10). While waiting for the first data, a middle dot `·` is displayed.
 
 ## Installation
 

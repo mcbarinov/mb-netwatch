@@ -22,19 +22,23 @@ class TestDefaults:
         assert cfg.probed.ip_timeout == 5.0
         assert cfg.probed.retention_days == 30
 
+    def test_default_latency_threshold(self):
+        """Default latency threshold settings."""
+        cfg = Config()
+        assert cfg.latency_threshold.ok_ms == 300
+        assert cfg.latency_threshold.slow_ms == 800
+        assert cfg.latency_threshold.stale_seconds == 10.0
+
     def test_default_tray(self):
-        """Default tray settings match documented values."""
+        """Default tray settings."""
         cfg = Config()
         assert cfg.tray.poll_interval == 2.0
-        assert cfg.tray.ok_threshold_ms == 300
-        assert cfg.tray.slow_threshold_ms == 800
-        assert cfg.tray.stale_threshold == 10.0
 
     def test_default_tui(self):
         """Default TUI settings."""
         cfg = Config()
         assert cfg.tui.poll_interval == 0.5
-        assert cfg.tui.history_size == 60
+        assert cfg.tui.latency_history_size == 60
 
     def test_computed_paths(self):
         """Computed paths resolve relative to data_dir."""
@@ -47,8 +51,8 @@ class TestDefaults:
         assert cfg.tray_log_path == Path("/test/dir/tray.log")
 
 
-class TestTrayThresholdOrdering:
-    """ok_threshold_ms must be strictly less than slow_threshold_ms."""
+class TestLatencyThresholdOrdering:
+    """ok_ms must be strictly less than slow_ms."""
 
     @pytest.mark.parametrize(
         ("ok", "slow", "should_pass"),
@@ -63,12 +67,12 @@ class TestTrayThresholdOrdering:
     def test_threshold_ordering(self, ok, slow, should_pass):
         """Threshold ordering validation accepts valid, rejects invalid."""
         if should_pass:
-            cfg = Config(tray={"ok_threshold_ms": ok, "slow_threshold_ms": slow})
-            assert cfg.tray.ok_threshold_ms == ok
-            assert cfg.tray.slow_threshold_ms == slow
+            cfg = Config(latency_threshold={"ok_ms": ok, "slow_ms": slow})
+            assert cfg.latency_threshold.ok_ms == ok
+            assert cfg.latency_threshold.slow_ms == slow
         else:
-            with pytest.raises(ValidationError, match="ok_threshold_ms"):
-                Config(tray={"ok_threshold_ms": ok, "slow_threshold_ms": slow})
+            with pytest.raises(ValidationError, match="ok_ms"):
+                Config(latency_threshold={"ok_ms": ok, "slow_ms": slow})
 
 
 class TestFieldValidation:
@@ -84,11 +88,11 @@ class TestFieldValidation:
             ("probed", "retention_days", 0),
             ("probed", "retention_days", -1),
             ("probed", "latency_timeout", 0),
+            ("latency_threshold", "ok_ms", 0),
+            ("latency_threshold", "slow_ms", 0),
+            ("latency_threshold", "stale_seconds", -1),
             ("tray", "poll_interval", 0),
             ("tray", "poll_interval", -1),
-            ("tray", "ok_threshold_ms", 0),
-            ("tray", "slow_threshold_ms", 0),
-            ("tray", "stale_threshold", -1),
             ("tui", "poll_interval", 0),
         ],
     )
@@ -97,7 +101,7 @@ class TestFieldValidation:
         with pytest.raises(ValidationError):
             Config(**{section: {field: value}})
 
-    @pytest.mark.parametrize("section", ["probed", "tray", "tui"])
+    @pytest.mark.parametrize("section", ["probed", "latency_threshold", "tray", "tui"])
     def test_extra_fields_forbidden(self, section):
         """Unknown keys within a known section raise ValidationError."""
         with pytest.raises(ValidationError):
@@ -116,17 +120,17 @@ class TestConfigBuild:
         """Missing config file returns default Config."""
         cfg = Config.build(data_dir=tmp_path)
         assert cfg.probed.latency_interval == 2.0
-        assert cfg.tray.ok_threshold_ms == 300
+        assert cfg.latency_threshold.ok_ms == 300
 
     def test_partial_override(self, tmp_path):
         """Valid TOML with partial overrides merges with defaults."""
-        (tmp_path / "config.toml").write_text("[probed]\nlatency_interval = 5.0\n\n[tray]\nok_threshold_ms = 100\n")
+        (tmp_path / "config.toml").write_text("[probed]\nlatency_interval = 5.0\n\n[latency_threshold]\nok_ms = 100\n")
 
         cfg = Config.build(data_dir=tmp_path)
         assert cfg.probed.latency_interval == 5.0
         assert cfg.probed.vpn_interval == 10.0  # default preserved
-        assert cfg.tray.ok_threshold_ms == 100
-        assert cfg.tray.slow_threshold_ms == 800  # default preserved
+        assert cfg.latency_threshold.ok_ms == 100
+        assert cfg.latency_threshold.slow_ms == 800  # default preserved
 
     def test_unknown_section_raises(self, tmp_path):
         """Unknown TOML section raises ValueError."""

@@ -1,6 +1,7 @@
 """Textual TUI dashboard for mb-netwatch."""
 
 import os
+import time
 from datetime import UTC, datetime
 from typing import ClassVar
 
@@ -183,19 +184,23 @@ class TuiApp(App[None]):
 
     def _refresh_data(self) -> None:
         """Poll DB and update all widgets."""
-        ok_ms = self._config.tray.ok_threshold_ms
-        slow_ms = self._config.tray.slow_threshold_ms
+        ok_ms = self._config.latency_threshold.ok_ms
+        slow_ms = self._config.latency_threshold.slow_ms
 
         latency = self._db.fetch_latest_probe_latency()
         vpn = self._db.fetch_latest_probe_vpn()
         ip_probe = self._db.fetch_latest_probe_ip()
-        history = self._db.fetch_recent_probe_latency(self._config.tui.history_size)
+        history = self._db.fetch_recent_probe_latency(self._config.tui.latency_history_size)
         recent_vpn = self._db.fetch_recent_probe_vpn(10)
         recent_ip = self._db.fetch_recent_probe_ip(10)
+        stale = latency is not None and (time.time() - latency.created_at) > self._config.latency_threshold.stale_seconds
 
         status = Text("mb-netwatch", style="bold")
         status.append("    ")
-        status.append_text(_format_status_latency(latency, ok_ms, slow_ms))
+        if stale:
+            status.append("● stale", style="dim")
+        else:
+            status.append_text(_format_status_latency(latency, ok_ms, slow_ms))
         status.append("    ")
         status.append_text(_format_status_vpn(vpn))
         status.append("    ")

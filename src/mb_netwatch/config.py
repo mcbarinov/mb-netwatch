@@ -80,14 +80,14 @@ class TuiConfig(BaseModel):
 
     Args:
         poll_interval: seconds between TUI DB polls.
-        latency_history_size: number of latency readings in sparkline.
+        latency_history_max: max number of latency readings in sparkline.
 
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     poll_interval: float = Field(default=0.5, gt=0)
-    latency_history_size: int = Field(default=60, gt=0)
+    latency_history_max: int = Field(default=300, gt=0)
 
 
 class Config(BaseModel):

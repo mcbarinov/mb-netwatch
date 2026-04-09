@@ -38,7 +38,7 @@ class TestDefaults:
         """Default TUI settings."""
         cfg = Config()
         assert cfg.tui.poll_interval == 0.5
-        assert cfg.tui.latency_history_size == 60
+        assert cfg.tui.latency_history_max == 300
 
     def test_computed_paths(self):
         """Computed paths resolve relative to data_dir."""

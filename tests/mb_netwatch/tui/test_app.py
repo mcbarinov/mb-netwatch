@@ -1,7 +1,7 @@
 """Tests for TUI sparkline rendering."""
 
 from mb_netwatch.core.db import ProbeLatency
-from mb_netwatch.tui.app import build_sparkline
+from mb_netwatch.tui.widgets.latency import build_sparkline
 
 
 class TestBuildSparkline:

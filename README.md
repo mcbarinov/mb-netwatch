@@ -82,7 +82,7 @@ poll_interval = 2.0      # seconds between tray DB polls (default: 2.0)
 
 [tui]
 poll_interval = 0.5      # seconds between TUI dashboard DB polls (default: 0.5)
-latency_history_size = 60  # number of latency readings in sparkline (default: 60)
+latency_history_max = 300  # max latency readings in sparkline (default: 300)
 ```
 
 The menu bar shows a fixed-width 3-character title: 2-letter country code + status symbol (`●` OK / `◐` SLOW / `○` BAD / `✕` DOWN), e.g. `US●`. Click the menu bar icon to see the exact latency in the dropdown. If probed stops writing data, the symbol changes to `–` (en dash) after `stale_seconds` seconds (default 10). While waiting for the first data, a middle dot `·` is displayed.

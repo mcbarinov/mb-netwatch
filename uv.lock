@@ -376,7 +376,7 @@ linkify = [
 
 [[package]]
 name = "mb-netwatch"
-version = "0.0.5"
+version = "0.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -399,7 +399,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "~=3.13.5" },
-    { name = "mm-clikit", specifier = "~=0.1.1" },
+    { name = "mm-clikit", specifier = "~=0.1.2" },
     { name = "mm-pymac", specifier = "~=0.0.3" },
     { name = "psutil", specifier = "~=7.0" },
 ]
@@ -438,7 +438,7 @@ wheels = [
 
 [[package]]
 name = "mm-clikit"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mm-result" },
@@ -450,9 +450,9 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/31/3bce505dc3b9a50d2e89c94a45eea561c896536a876c0f4410fb3212a290/mm_clikit-0.1.1.tar.gz", hash = "sha256:412ea8bda55635c1300ae03cd8a589f3501a857a1c0aabc4abfe6bcf2ad0a253", size = 73731, upload-time = "2026-04-08T08:04:26.301Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/a4/e7878249d0d6d435fedaf57b45c7ef3921e684b0c87034178429f79bea6d/mm_clikit-0.1.2.tar.gz", hash = "sha256:7668260d6fd944a46f00f93c0959c1cf13694a27d68f994a6dbf1a1bfc7172dd", size = 74576, upload-time = "2026-04-09T08:07:27.091Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/8b/9ed9f6dc18627e59392520ee14c5426513ce37ed34df61a2685f94ebc507/mm_clikit-0.1.1-py3-none-any.whl", hash = "sha256:d1bc84458e2c4c4db0540adf7a155a5aeb4ca107ac92d0fbcf72b1f249f392e8", size = 22665, upload-time = "2026-04-08T08:04:27.423Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/22/fe4ca949b9e135569d987c69566ea77f7b7c7ca1d9d63372ec79dc4d51db/mm_clikit-0.1.2-py3-none-any.whl", hash = "sha256:63e9086c4e9ed02caf626a6b0f9a769f6ac4dd7eb7f60d197dcdfda7dfbed754", size = 22861, upload-time = "2026-04-09T08:07:28.192Z" },
 ]
 
 [[package]]

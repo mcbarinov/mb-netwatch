@@ -1,4 +1,4 @@
-<!-- version: 2026-04-08 | source: https://github.com/mcbarinov/mm-clikit -->
+<!-- version: 2026-04-09 | source: https://github.com/mcbarinov/mm-clikit -->
 
 # CLI Application Architecture Guide
 
@@ -277,20 +277,15 @@ from typing import Self
 from mm_clikit import SqliteDb, SqliteRow
 
 
-def _migrate_v1(conn: sqlite3.Connection) -> None:
-    """Create initial schema."""
-    conn.execute("""
-        CREATE TABLE items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at INTEGER NOT NULL DEFAULT (unixepoch())
-        ) STRICT
-    """)
+_MIGRATE_V1 = """
+CREATE TABLE items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+) STRICT;
+"""
 
-
-def _migrate_v2(conn: sqlite3.Connection) -> None:
-    """Add tags column."""
-    conn.execute("ALTER TABLE items ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
+_MIGRATE_V2 = "ALTER TABLE items ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"
 
 
 class ItemRow(SqliteRow):
@@ -309,7 +304,7 @@ class Db(SqliteDb):
     """SQLite database access."""
 
     def __init__(self, db_path: Path) -> None:
-        super().__init__(db_path, migrations=(_migrate_v1, _migrate_v2))
+        super().__init__(db_path, migrations=(_MIGRATE_V1, _MIGRATE_V2))
 
     def insert_item(self, name: str) -> int:
         """Insert an item and return its ID."""
@@ -324,9 +319,9 @@ class Db(SqliteDb):
 ```
 
 Migration rules:
-- Do **not** call `commit()` — `SqliteDb` commits each migration together with its `user_version` bump atomically.
-- Use `conn.execute()` for each statement, **not** `conn.executescript()` (which does implicit commits and breaks atomicity).
-- Add new migrations as `_migrate_v2`, `_migrate_v3`, etc. and append to the `migrations` tuple.
+- Each migration is either a plain SQL string (semicolon-separated statements) or a callable receiving `sqlite3.Connection`. SQL strings are preferred for DDL; callables are for programmatic logic (data transforms, conditional DDL).
+- `SqliteDb` commits each migration together with its `user_version` bump atomically. Callable migrations must **not** call `commit()` or use `conn.executescript()` (which does implicit commits).
+- Add new migrations as `_MIGRATE_V2`, `_MIGRATE_V3`, etc. and append to the `migrations` tuple.
 
 ---
 

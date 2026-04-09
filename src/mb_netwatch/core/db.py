@@ -56,26 +56,26 @@ class ProbeIp(SqliteRow):
         return cls(created_at=row["created_at"], updated_at=row["updated_at"], ip=row["ip"], country_code=row["country_code"])
 
 
-def _migrate_v1(conn: sqlite3.Connection) -> None:
-    """Create initial schema: probe_latency, probe_vpn, probe_ip."""
-    conn.execute("CREATE TABLE probe_latency (created_at REAL NOT NULL, latency_ms REAL, winner_endpoint TEXT)")
-    conn.execute("CREATE INDEX idx_probe_latency_created_at ON probe_latency(created_at)")
-    conn.execute("""
-        CREATE TABLE probe_vpn (
-            created_at REAL NOT NULL, updated_at REAL NOT NULL,
-            is_active INTEGER NOT NULL, tunnel_mode TEXT NOT NULL, provider TEXT
-        )
-    """)
-    conn.execute("CREATE INDEX idx_probe_vpn_created_at ON probe_vpn(created_at)")
-    conn.execute("CREATE INDEX idx_probe_vpn_updated_at ON probe_vpn(updated_at)")
-    conn.execute("""
-        CREATE TABLE probe_ip (
-            created_at REAL NOT NULL, updated_at REAL NOT NULL,
-            ip TEXT, country_code TEXT
-        )
-    """)
-    conn.execute("CREATE INDEX idx_probe_ip_created_at ON probe_ip(created_at)")
-    conn.execute("CREATE INDEX idx_probe_ip_updated_at ON probe_ip(updated_at)")
+_MIGRATE_V1 = """
+CREATE TABLE probe_latency (
+    created_at REAL NOT NULL, latency_ms REAL, winner_endpoint TEXT
+);
+CREATE INDEX idx_probe_latency_created_at ON probe_latency(created_at);
+
+CREATE TABLE probe_vpn (
+    created_at REAL NOT NULL, updated_at REAL NOT NULL,
+    is_active INTEGER NOT NULL, tunnel_mode TEXT NOT NULL, provider TEXT
+);
+CREATE INDEX idx_probe_vpn_created_at ON probe_vpn(created_at);
+CREATE INDEX idx_probe_vpn_updated_at ON probe_vpn(updated_at);
+
+CREATE TABLE probe_ip (
+    created_at REAL NOT NULL, updated_at REAL NOT NULL,
+    ip TEXT, country_code TEXT
+);
+CREATE INDEX idx_probe_ip_created_at ON probe_ip(created_at);
+CREATE INDEX idx_probe_ip_updated_at ON probe_ip(updated_at);
+"""
 
 
 class Db(SqliteDb):
@@ -88,7 +88,7 @@ class Db(SqliteDb):
             db_path: Path to the SQLite database file.
 
         """
-        super().__init__(db_path, migrations=(_migrate_v1,))
+        super().__init__(db_path, migrations=(_MIGRATE_V1,))
 
     # -- Latency probes --------------------------------------------------------
 

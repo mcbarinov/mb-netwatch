@@ -24,9 +24,9 @@ async def run_daemon(core: Core) -> None:
         loop.add_signal_handler(sig, shutdown.set)
 
     cfg = core.config.probed
-    core.db.purge_old_latency_checks(cfg.retention_days)
-    core.db.purge_old_vpn_checks(cfg.retention_days)
-    core.db.purge_old_ip_checks(cfg.retention_days)
+    core.db.purge_old_probe_latency(cfg.retention_days)
+    core.db.purge_old_probe_vpn(cfg.retention_days)
+    core.db.purge_old_probe_ip(cfg.retention_days)
 
     # VPN loop sets this event when VPN state changes, so IP loop wakes up immediately instead of waiting for its full interval
     ip_trigger = asyncio.Event()
@@ -99,7 +99,7 @@ async def _purge_loop(core: Core, shutdown: asyncio.Event) -> None:
     while not shutdown.is_set():
         await _wait_shutdown(shutdown, cfg.purge_interval)
         if not shutdown.is_set():
-            lat_deleted = core.db.purge_old_latency_checks(cfg.retention_days)
-            vpn_deleted = core.db.purge_old_vpn_checks(cfg.retention_days)
-            ip_deleted = core.db.purge_old_ip_checks(cfg.retention_days)
-            log.info("Purged %d old latency checks, %d old VPN checks, %d old IP checks.", lat_deleted, vpn_deleted, ip_deleted)
+            lat_deleted = core.db.purge_old_probe_latency(cfg.retention_days)
+            vpn_deleted = core.db.purge_old_probe_vpn(cfg.retention_days)
+            ip_deleted = core.db.purge_old_probe_ip(cfg.retention_days)
+            log.info("Purged %d latency, %d VPN, %d IP old probe rows.", lat_deleted, vpn_deleted, ip_deleted)

@@ -7,7 +7,7 @@ from mm_clikit import setup_logging, write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.core.core import Core
-from mb_netwatch.core.db import IpCheckRow, LatencyRow, VpnCheckRow
+from mb_netwatch.core.db import ProbeIp, ProbeLatency, ProbeVpn
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +51,9 @@ class NetwatchTray:
 
     def _refresh(self) -> None:
         """Poll DB and update menu bar title and detail items."""
-        latency = self._core.db.fetch_latest_latency_check()
-        ip = self._core.db.fetch_latest_ip_check()
-        vpn = self._core.db.fetch_latest_vpn_check()
+        latency = self._core.db.fetch_latest_probe_latency()
+        ip = self._core.db.fetch_latest_probe_ip()
+        vpn = self._core.db.fetch_latest_probe_vpn()
         stale = self._is_stale(latency)
 
         self._tray.title = self._format_title(latency, ip, stale=stale)
@@ -61,7 +61,7 @@ class NetwatchTray:
         self._vpn_item.title = self._format_vpn(vpn, stale=stale)
         self._ip_item.title = self._format_ip(ip, stale=stale)
 
-    def _format_title(self, latency: LatencyRow | None, ip: IpCheckRow | None, *, stale: bool) -> str:
+    def _format_title(self, latency: ProbeLatency | None, ip: ProbeIp | None, *, stale: bool) -> str:
         """Build a fixed-width (3-char) menu bar title: country code + symbol."""
         if latency is None:
             symbol = "\u00b7"
@@ -72,7 +72,7 @@ class NetwatchTray:
         country = ip.country_code if ip and not stale and latency is not None else "  "
         return f"{country}{symbol}"
 
-    def _format_latency(self, latency: LatencyRow | None, *, stale: bool) -> str:
+    def _format_latency(self, latency: ProbeLatency | None, *, stale: bool) -> str:
         """Build the exact latency string for the dropdown menu item."""
         if stale:
             return "Latency: stale"
@@ -80,7 +80,7 @@ class NetwatchTray:
             return "Latency: DOWN"
         return f"Latency: {latency.latency_ms:.0f}ms"
 
-    def _format_vpn(self, vpn: VpnCheckRow | None, *, stale: bool) -> str:
+    def _format_vpn(self, vpn: ProbeVpn | None, *, stale: bool) -> str:
         """Build the VPN status string for the dropdown menu item."""
         if stale:
             return "VPN: stale"
@@ -94,7 +94,7 @@ class NetwatchTray:
             label += f" ({vpn.provider})"
         return label
 
-    def _format_ip(self, ip: IpCheckRow | None, *, stale: bool) -> str:
+    def _format_ip(self, ip: ProbeIp | None, *, stale: bool) -> str:
         """Build the public IP string for the dropdown menu item."""
         if stale:
             return "IP: stale"
@@ -116,8 +116,8 @@ class NetwatchTray:
             return "\u25d0"
         return "\u25cb"
 
-    def _is_stale(self, latency: LatencyRow | None) -> bool:
+    def _is_stale(self, latency: ProbeLatency | None) -> bool:
         """Check if the latest latency row is too old to be trusted."""
         if latency is None:
             return False  # no data at all is handled separately (shows "...")
-        return (time.time() - latency.ts) > self._core.config.tray.stale_threshold
+        return (time.time() - latency.created_at) > self._core.config.tray.stale_threshold

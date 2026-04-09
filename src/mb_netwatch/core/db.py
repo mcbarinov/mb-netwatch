@@ -1,4 +1,4 @@
-"""SQLite storage for latency, VPN, and IP check results."""
+"""SQLite storage for probe results: latency, VPN, and IP."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -8,21 +8,21 @@ from typing import Self
 from mm_clikit import SqliteDb, SqliteRow
 
 
-class LatencyRow(SqliteRow):
-    """Single latency row from the database."""
+class ProbeLatency(SqliteRow):
+    """Single latency probe row."""
 
-    ts: float  # UTC Unix timestamp (seconds since epoch)
+    created_at: float  # UTC Unix timestamp (seconds since epoch)
     latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
     winner_endpoint: str | None  # URL that responded first; None when down
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Self:
         """Construct from a sqlite3.Row."""
-        return cls(ts=row["ts"], latency_ms=row["latency_ms"], winner_endpoint=row["winner_endpoint"])
+        return cls(created_at=row["created_at"], latency_ms=row["latency_ms"], winner_endpoint=row["winner_endpoint"])
 
 
-class VpnCheckRow(SqliteRow):
-    """Single VPN check row from the database."""
+class ProbeVpn(SqliteRow):
+    """Single VPN probe row."""
 
     created_at: float  # UTC Unix timestamp when this state first appeared
     updated_at: float  # UTC Unix timestamp of most recent confirmation
@@ -42,8 +42,8 @@ class VpnCheckRow(SqliteRow):
         )
 
 
-class IpCheckRow(SqliteRow):
-    """Single IP check row from the database."""
+class ProbeIp(SqliteRow):
+    """Single IP probe row."""
 
     created_at: float  # UTC Unix timestamp when this (ip, country_code) pair first appeared
     updated_at: float  # UTC Unix timestamp of most recent confirmation
@@ -57,29 +57,29 @@ class IpCheckRow(SqliteRow):
 
 
 def _migrate_v1(conn: sqlite3.Connection) -> None:
-    """Create initial schema: latency_checks, vpn_checks, ip_checks."""
-    conn.execute("CREATE TABLE IF NOT EXISTS latency_checks (ts REAL NOT NULL, latency_ms REAL, winner_endpoint TEXT)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_latency_checks_ts ON latency_checks(ts)")
+    """Create initial schema: probe_latency, probe_vpn, probe_ip."""
+    conn.execute("CREATE TABLE probe_latency (created_at REAL NOT NULL, latency_ms REAL, winner_endpoint TEXT)")
+    conn.execute("CREATE INDEX idx_probe_latency_created_at ON probe_latency(created_at)")
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS vpn_checks (
+        CREATE TABLE probe_vpn (
             created_at REAL NOT NULL, updated_at REAL NOT NULL,
             is_active INTEGER NOT NULL, tunnel_mode TEXT NOT NULL, provider TEXT
         )
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_vpn_checks_created_at ON vpn_checks(created_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_vpn_checks_updated_at ON vpn_checks(updated_at)")
+    conn.execute("CREATE INDEX idx_probe_vpn_created_at ON probe_vpn(created_at)")
+    conn.execute("CREATE INDEX idx_probe_vpn_updated_at ON probe_vpn(updated_at)")
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS ip_checks (
+        CREATE TABLE probe_ip (
             created_at REAL NOT NULL, updated_at REAL NOT NULL,
             ip TEXT, country_code TEXT
         )
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_ip_checks_created_at ON ip_checks(created_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_ip_checks_updated_at ON ip_checks(updated_at)")
+    conn.execute("CREATE INDEX idx_probe_ip_created_at ON probe_ip(created_at)")
+    conn.execute("CREATE INDEX idx_probe_ip_updated_at ON probe_ip(updated_at)")
 
 
 class Db(SqliteDb):
-    """Database access object for latency, VPN, and IP check data."""
+    """Database access object for probe data."""
 
     def __init__(self, db_path: Path) -> None:
         """Open database and run pending migrations.
@@ -90,42 +90,45 @@ class Db(SqliteDb):
         """
         super().__init__(db_path, migrations=(_migrate_v1,))
 
-    # -- Latency checks --------------------------------------------------------
+    # -- Latency probes --------------------------------------------------------
 
-    def insert_latency_check(self, ts: datetime, latency_ms: float | None, winner_endpoint: str | None) -> None:
-        """Insert a single latency check result."""
+    def insert_probe_latency(self, ts: datetime, latency_ms: float | None, winner_endpoint: str | None) -> None:
+        """Insert a single latency probe result."""
         self.conn.execute(
-            "INSERT INTO latency_checks (ts, latency_ms, winner_endpoint) VALUES (?, ?, ?)",
+            "INSERT INTO probe_latency (created_at, latency_ms, winner_endpoint) VALUES (?, ?, ?)",
             (ts.timestamp(), latency_ms, winner_endpoint),
         )
         self.conn.commit()
 
-    def fetch_latest_latency_check(self) -> LatencyRow | None:
-        """Return the most recent latency check, or None if table is empty."""
-        row = self.conn.execute("SELECT ts, latency_ms, winner_endpoint FROM latency_checks ORDER BY ts DESC LIMIT 1").fetchone()
-        return LatencyRow.from_row(row) if row else None
+    def fetch_latest_probe_latency(self) -> ProbeLatency | None:
+        """Return the most recent latency probe, or None if table is empty."""
+        row = self.conn.execute(
+            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency ORDER BY created_at DESC LIMIT 1",
+        ).fetchone()
+        return ProbeLatency.from_row(row) if row else None
 
-    def fetch_latency_checks_since(self, since_ts: float) -> list[LatencyRow]:
-        """Return all latency checks with ts > since_ts, ordered by ts ascending."""
+    def fetch_probe_latency_since(self, since_ts: float) -> list[ProbeLatency]:
+        """Return all latency probes with created_at > since_ts, ordered ascending."""
         rows = self.conn.execute(
-            "SELECT ts, latency_ms, winner_endpoint FROM latency_checks WHERE ts > ? ORDER BY ts ASC", (since_ts,)
+            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency WHERE created_at > ? ORDER BY created_at ASC",
+            (since_ts,),
         ).fetchall()
-        return [LatencyRow.from_row(r) for r in rows]
+        return [ProbeLatency.from_row(r) for r in rows]
 
-    def purge_old_latency_checks(self, retention_days: int) -> int:
-        """Delete latency checks older than *retention_days*. Return rows deleted."""
+    def purge_old_probe_latency(self, retention_days: int) -> int:
+        """Delete latency probes older than *retention_days*. Return rows deleted."""
         cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
-        cursor = self.conn.execute("DELETE FROM latency_checks WHERE ts < ?", (cutoff.timestamp(),))
+        cursor = self.conn.execute("DELETE FROM probe_latency WHERE created_at < ?", (cutoff.timestamp(),))
         self.conn.commit()
         return cursor.rowcount
 
-    # -- VPN checks ------------------------------------------------------------
+    # -- VPN probes ------------------------------------------------------------
 
-    def upsert_vpn_check(self, ts: datetime, is_active: bool, tunnel_mode: str, provider: str | None) -> None:
-        """Insert or update a VPN check result. Deduplicates consecutive identical states."""
+    def upsert_probe_vpn(self, ts: datetime, is_active: bool, tunnel_mode: str, provider: str | None) -> None:
+        """Insert or update a VPN probe result. Deduplicates consecutive identical states."""
         ts_val = ts.timestamp()
         latest = self.conn.execute(
-            "SELECT rowid, is_active, tunnel_mode, provider FROM vpn_checks ORDER BY updated_at DESC LIMIT 1",
+            "SELECT rowid, is_active, tunnel_mode, provider FROM probe_vpn ORDER BY updated_at DESC LIMIT 1",
         ).fetchone()
         same = latest is not None and (bool(latest["is_active"]), latest["tunnel_mode"], latest["provider"]) == (
             is_active,
@@ -133,70 +136,70 @@ class Db(SqliteDb):
             provider,
         )
         if same:
-            self.conn.execute("UPDATE vpn_checks SET updated_at = ? WHERE rowid = ?", (ts_val, latest["rowid"]))
+            self.conn.execute("UPDATE probe_vpn SET updated_at = ? WHERE rowid = ?", (ts_val, latest["rowid"]))
         else:
             self.conn.execute(
-                "INSERT INTO vpn_checks (created_at, updated_at, is_active, tunnel_mode, provider) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO probe_vpn (created_at, updated_at, is_active, tunnel_mode, provider) VALUES (?, ?, ?, ?, ?)",
                 (ts_val, ts_val, int(is_active), tunnel_mode, provider),
             )
         self.conn.commit()
 
-    def fetch_latest_vpn_check(self) -> VpnCheckRow | None:
-        """Return the most recently confirmed VPN check, or None if table is empty."""
+    def fetch_latest_probe_vpn(self) -> ProbeVpn | None:
+        """Return the most recently confirmed VPN probe, or None if table is empty."""
         row = self.conn.execute(
-            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM vpn_checks ORDER BY updated_at DESC LIMIT 1",
+            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM probe_vpn ORDER BY updated_at DESC LIMIT 1",
         ).fetchone()
-        return VpnCheckRow.from_row(row) if row else None
+        return ProbeVpn.from_row(row) if row else None
 
-    def fetch_vpn_checks_since(self, since_ts: float) -> list[VpnCheckRow]:
+    def fetch_probe_vpn_since(self, since_ts: float) -> list[ProbeVpn]:
         """Return VPN state changes with created_at > since_ts, ordered ascending."""
         rows = self.conn.execute(
-            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM vpn_checks"
+            "SELECT created_at, updated_at, is_active, tunnel_mode, provider FROM probe_vpn"
             " WHERE created_at > ? ORDER BY created_at ASC",
             (since_ts,),
         ).fetchall()
-        return [VpnCheckRow.from_row(r) for r in rows]
+        return [ProbeVpn.from_row(r) for r in rows]
 
-    def purge_old_vpn_checks(self, retention_days: int) -> int:
-        """Delete VPN checks not confirmed within *retention_days*. Return rows deleted."""
+    def purge_old_probe_vpn(self, retention_days: int) -> int:
+        """Delete VPN probes not confirmed within *retention_days*. Return rows deleted."""
         cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
-        cursor = self.conn.execute("DELETE FROM vpn_checks WHERE updated_at < ?", (cutoff.timestamp(),))
+        cursor = self.conn.execute("DELETE FROM probe_vpn WHERE updated_at < ?", (cutoff.timestamp(),))
         self.conn.commit()
         return cursor.rowcount
 
-    # -- IP checks -------------------------------------------------------------
+    # -- IP probes -------------------------------------------------------------
 
-    def upsert_ip_check(self, ts: datetime, ip: str | None, country_code: str | None) -> None:
-        """Insert or update an IP check result. Deduplicates consecutive identical values."""
+    def upsert_probe_ip(self, ts: datetime, ip: str | None, country_code: str | None) -> None:
+        """Insert or update an IP probe result. Deduplicates consecutive identical values."""
         ts_val = ts.timestamp()
-        latest = self.conn.execute("SELECT rowid, ip, country_code FROM ip_checks ORDER BY updated_at DESC LIMIT 1").fetchone()
+        latest = self.conn.execute("SELECT rowid, ip, country_code FROM probe_ip ORDER BY updated_at DESC LIMIT 1").fetchone()
         if latest is not None and (latest["ip"], latest["country_code"]) == (ip, country_code):
-            self.conn.execute("UPDATE ip_checks SET updated_at = ? WHERE rowid = ?", (ts_val, latest["rowid"]))
+            self.conn.execute("UPDATE probe_ip SET updated_at = ? WHERE rowid = ?", (ts_val, latest["rowid"]))
         else:
             self.conn.execute(
-                "INSERT INTO ip_checks (created_at, updated_at, ip, country_code) VALUES (?, ?, ?, ?)",
+                "INSERT INTO probe_ip (created_at, updated_at, ip, country_code) VALUES (?, ?, ?, ?)",
                 (ts_val, ts_val, ip, country_code),
             )
         self.conn.commit()
 
-    def fetch_latest_ip_check(self) -> IpCheckRow | None:
-        """Return the most recently confirmed IP check, or None if table is empty."""
+    def fetch_latest_probe_ip(self) -> ProbeIp | None:
+        """Return the most recently confirmed IP probe, or None if table is empty."""
         row = self.conn.execute(
-            "SELECT created_at, updated_at, ip, country_code FROM ip_checks ORDER BY updated_at DESC LIMIT 1",
+            "SELECT created_at, updated_at, ip, country_code FROM probe_ip ORDER BY updated_at DESC LIMIT 1",
         ).fetchone()
-        return IpCheckRow.from_row(row) if row else None
+        return ProbeIp.from_row(row) if row else None
 
-    def fetch_ip_checks_since(self, since_ts: float) -> list[IpCheckRow]:
+    def fetch_probe_ip_since(self, since_ts: float) -> list[ProbeIp]:
         """Return IP state changes with created_at > since_ts, ordered ascending."""
         rows = self.conn.execute(
-            "SELECT created_at, updated_at, ip, country_code FROM ip_checks WHERE created_at > ? ORDER BY created_at ASC",
+            "SELECT created_at, updated_at, ip, country_code FROM probe_ip WHERE created_at > ? ORDER BY created_at ASC",
             (since_ts,),
         ).fetchall()
-        return [IpCheckRow.from_row(r) for r in rows]
+        return [ProbeIp.from_row(r) for r in rows]
 
-    def purge_old_ip_checks(self, retention_days: int) -> int:
-        """Delete IP checks not confirmed within *retention_days*. Return rows deleted."""
+    def purge_old_probe_ip(self, retention_days: int) -> int:
+        """Delete IP probes not confirmed within *retention_days*. Return rows deleted."""
         cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
-        cursor = self.conn.execute("DELETE FROM ip_checks WHERE updated_at < ?", (cutoff.timestamp(),))
+        cursor = self.conn.execute("DELETE FROM probe_ip WHERE updated_at < ?", (cutoff.timestamp(),))
         self.conn.commit()
         return cursor.rowcount

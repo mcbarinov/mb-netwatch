@@ -7,19 +7,19 @@ SQLite database stored at `<data_dir>/netwatch.db`. All timestamps are UTC Unix 
 
 ## Tables
 
-### latency_checks
+### probe_latency
 
 Every probe inserts a new row. No deduplication — each measurement is unique.
 
 | Column           | Type | Nullable | Description                                   |
 |------------------|------|----------|-----------------------------------------------|
-| ts               | REAL | NO       | Probe timestamp                               |
+| created_at       | REAL | NO       | Probe timestamp                               |
 | latency_ms       | REAL | YES      | Round-trip time in ms; NULL when all endpoints failed |
 | winner_endpoint  | TEXT | YES      | URL that responded first; NULL when down       |
 
-Indexes: `ts`.
+Indexes: `created_at`.
 
-### vpn_checks
+### probe_vpn
 
 | Column      | Type    | Nullable | Description                              |
 |-------------|---------|----------|------------------------------------------|
@@ -31,7 +31,7 @@ Indexes: `ts`.
 
 Indexes: `created_at`, `updated_at`.
 
-### ip_checks
+### probe_ip
 
 | Column       | Type | Nullable | Description                                      |
 |--------------|------|----------|--------------------------------------------------|
@@ -42,7 +42,7 @@ Indexes: `created_at`, `updated_at`.
 
 Indexes: `created_at`, `updated_at`.
 
-## Deduplication (vpn_checks, ip_checks)
+## Deduplication (probe_vpn, probe_ip)
 
 These two tables use **upsert deduplication** to avoid storing identical consecutive rows.
 
@@ -51,8 +51,8 @@ On each check the daemon compares the new result with the latest row (by `update
 - **Different result** — a new row is inserted with `created_at = updated_at = now`.
 
 Comparison fields:
-- `vpn_checks`: `(is_active, tunnel_mode, provider)`
-- `ip_checks`: `(ip, country_code)`
+- `probe_vpn`: `(is_active, tunnel_mode, provider)`
+- `probe_ip`: `(ip, country_code)`
 
 NULL values are treated as equal to NULL for comparison purposes.
 
@@ -66,4 +66,4 @@ NULL values are treated as equal to NULL for comparison purposes.
 
 ## Retention
 
-Old rows are purged periodically (default: every hour). Configurable via `retention_days` (default: 30). For `vpn_checks` and `ip_checks`, retention is based on `updated_at`, not `created_at` — a row that has been continuously confirmed won't be purged even if it was first created long ago.
+Old rows are purged periodically (default: every hour). Configurable via `retention_days` (default: 30). For `probe_vpn` and `probe_ip`, retention is based on `updated_at`, not `created_at` — a row that has been continuously confirmed won't be purged even if it was first created long ago.

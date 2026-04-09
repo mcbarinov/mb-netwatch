@@ -7,7 +7,7 @@ import signal
 
 from mm_clikit import setup_logging, write_pid_file
 
-from mb_netwatch.core import Core
+from mb_netwatch.core.core import Core
 
 log = logging.getLogger(__name__)
 

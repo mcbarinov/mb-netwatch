@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from mm_clikit import DualModeOutput
 from pydantic import BaseModel, ConfigDict
 
-from mb_netwatch.core import ProbeResult
+from mb_netwatch.core.service import ProbeResult
 
 
 class WatchRow(BaseModel):
@@ -13,13 +13,13 @@ class WatchRow(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    ts: str
-    latency_ms: float | None
-    vpn_active: bool
-    tunnel_mode: str
-    vpn_provider: str | None
-    ip: str | None
-    country_code: str | None
+    ts: str  # Local ISO 8601 timestamp
+    latency_ms: float | None  # Round-trip time in milliseconds; None when down
+    vpn_active: bool  # Whether VPN tunnel is active
+    tunnel_mode: str  # "full", "split", or "unknown"
+    vpn_provider: str | None  # VPN app name; None when not identified
+    ip: str | None  # Public IPv4 address; None when lookup failed
+    country_code: str | None  # 2-letter ISO country code; None when lookup failed
 
 
 class StartStopResult(BaseModel):
@@ -27,8 +27,8 @@ class StartStopResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    component: str
-    message: str
+    component: str  # "probed" or "tray"
+    message: str  # Human-readable status message
 
 
 class Output(DualModeOutput):

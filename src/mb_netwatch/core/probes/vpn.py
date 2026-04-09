@@ -16,9 +16,9 @@ class VpnStatus(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    is_active: bool
+    is_active: bool  # Whether traffic is routed through a tunnel interface
     tunnel_mode: str  # "full", "split", or "unknown"
-    provider: str | None
+    provider: str | None  # VPN app name from scutil; None when not identified
 
 
 def detect_tunnel_interface() -> tuple[str, str] | None:

@@ -6,7 +6,7 @@ import time
 from mm_clikit import setup_logging, write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
-from mb_netwatch.core import Core
+from mb_netwatch.core.core import Core
 from mb_netwatch.core.db import IpCheckRow, LatencyRow, VpnCheckRow
 
 log = logging.getLogger(__name__)

@@ -16,8 +16,8 @@ class Core:
 
         """
         self.config = config
-        self.db = Db(config.db_path)
-        self.service = Service(self.db, config)
+        self.db = Db(config.db_path)  # SQLite database — used directly for simple reads
+        self.service = Service(self.db, config)  # Business logic (validation, orchestration)
 
     def close(self) -> None:
         """Release resources."""

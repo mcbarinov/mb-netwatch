@@ -23,8 +23,8 @@ class LatencyResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    latency_ms: float | None
-    winner_endpoint: str | None
+    latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
+    winner_endpoint: str | None  # URL that responded first; None when down
 
 
 async def _measure(session: aiohttp.ClientSession, url: str) -> tuple[float, str] | None:

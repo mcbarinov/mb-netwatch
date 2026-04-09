@@ -9,6 +9,7 @@ from typing import Any, Self
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 DEFAULT_DATA_DIR = Path.home() / ".local" / "mb-netwatch"
+"""Fallback data directory when neither --data-dir nor env var is set."""
 
 
 class _ProbedConfig(BaseModel):

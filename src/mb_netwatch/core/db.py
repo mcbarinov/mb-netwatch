@@ -11,9 +11,9 @@ from mm_clikit import SqliteDb, SqliteRow
 class LatencyRow(SqliteRow):
     """Single latency row from the database."""
 
-    ts: float
-    latency_ms: float | None
-    winner_endpoint: str | None
+    ts: float  # UTC Unix timestamp (seconds since epoch)
+    latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
+    winner_endpoint: str | None  # URL that responded first; None when down
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Self:
@@ -24,10 +24,10 @@ class LatencyRow(SqliteRow):
 class VpnCheckRow(SqliteRow):
     """Single VPN check row from the database."""
 
-    ts: float
-    is_active: bool
-    tunnel_mode: str
-    provider: str | None
+    ts: float  # UTC Unix timestamp (seconds since epoch)
+    is_active: bool  # Whether traffic is routed through a tunnel interface
+    tunnel_mode: str  # "full", "split", or "unknown"
+    provider: str | None  # VPN app name; None when not identified
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Self:
@@ -38,9 +38,9 @@ class VpnCheckRow(SqliteRow):
 class IpCheckRow(SqliteRow):
     """Single IP check row from the database."""
 
-    ts: float
-    ip: str | None
-    country_code: str | None
+    ts: float  # UTC Unix timestamp (seconds since epoch)
+    ip: str | None  # Public IPv4 address; None when all lookups failed
+    country_code: str | None  # 2-letter ISO country code; None when lookup failed
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Self:

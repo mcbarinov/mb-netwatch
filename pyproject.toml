@@ -12,14 +12,14 @@ classifiers = [
     "Topic :: Utilities",
 ]
 requires-python = ">=3.14"
-dependencies = ["aiohttp~=3.13.5", "psutil~=7.0", "mm-pymac~=0.0.3", "mm-clikit~=0.0.19"]
+dependencies = ["aiohttp~=3.13.5", "psutil~=7.0", "mm-pymac~=0.0.3", "mm-clikit~=0.1.1"]
 
 [project.urls]
 Homepage = "https://github.com/mcbarinov/mb-netwatch"
 Repository = "https://github.com/mcbarinov/mb-netwatch"
 
 [project.scripts]
-mb-netwatch = "mb_netwatch.cli:app"
+mb-netwatch = "mb_netwatch.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -30,9 +30,9 @@ exclude = [".claude/", "CLAUDE.md", "justfile", "uv.lock", "tests/", "tmp/"]
 
 [dependency-groups]
 dev = [
-    "pytest~=9.0.2",
+    "pytest~=9.0.3",
     "pytest-xdist~=3.8.0",
-    "ruff~=0.15.8",
+    "ruff~=0.15.9",
     "pip-audit~=2.10.0",
     "bandit~=1.9.4",
     "mypy~=1.20.0",

@@ -7,9 +7,10 @@ from mm_clikit import CoreContext, is_process_running, read_pid_file, stop_proce
 
 from mb_netwatch.cli.context import use_context
 from mb_netwatch.cli.output import Output, StartStopResult
-from mb_netwatch.core import Core
+from mb_netwatch.core.core import Core
 
 _STOP_TIMEOUT = 5.0
+"""Seconds to wait for graceful SIGTERM shutdown before giving up."""
 
 
 def _stop_component(component: str, app: CoreContext[Core, Output]) -> bool:

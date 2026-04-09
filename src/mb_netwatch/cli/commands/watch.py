@@ -9,7 +9,7 @@ from mm_clikit import CoreContext
 
 from mb_netwatch.cli.context import use_context
 from mb_netwatch.cli.output import Output, WatchRow
-from mb_netwatch.core import Core
+from mb_netwatch.core.core import Core
 from mb_netwatch.core.db import IpCheckRow, LatencyRow, VpnCheckRow
 
 

@@ -21,13 +21,13 @@ class ProbeResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    latency_ms: float | None
-    winner_endpoint: str | None
-    vpn_active: bool
-    tunnel_mode: str
-    vpn_provider: str | None
-    ip: str | None
-    country_code: str | None
+    latency_ms: float | None  # Round-trip time in milliseconds; None when down
+    winner_endpoint: str | None  # URL that responded first; None when down
+    vpn_active: bool  # Whether VPN tunnel is active
+    tunnel_mode: str  # "full", "split", or "unknown"
+    vpn_provider: str | None  # VPN app name; None when not identified
+    ip: str | None  # Public IPv4 address; None when lookup failed
+    country_code: str | None  # 2-letter ISO country code; None when lookup failed
 
 
 class Service:

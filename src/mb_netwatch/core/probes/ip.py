@@ -31,8 +31,8 @@ class IpResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    ip: str | None
-    country_code: str | None
+    ip: str | None  # Public IPv4 address; None when all lookups failed
+    country_code: str | None  # 2-letter ISO country code; None when lookup failed
 
 
 async def _race_urls(session: aiohttp.ClientSession, urls: list[str]) -> str | None:

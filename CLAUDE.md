@@ -14,6 +14,7 @@ These files are REQUIRED. Read them fully and follow all rules.
 ## Project Reading (context)
 These files are REQUIRED for project understanding.
 - `README.md`
+- `docs/cli-architecture.md`
 
 ## Preflight (mandatory)
 Before your first response:

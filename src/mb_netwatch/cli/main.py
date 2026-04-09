@@ -14,7 +14,7 @@ from mb_netwatch.cli.commands.tray import tray
 from mb_netwatch.cli.commands.watch import watch
 from mb_netwatch.cli.output import Output
 from mb_netwatch.config import Config
-from mb_netwatch.core import Core
+from mb_netwatch.core.core import Core
 
 app = TyperPlus(package_name="mb-netwatch")
 

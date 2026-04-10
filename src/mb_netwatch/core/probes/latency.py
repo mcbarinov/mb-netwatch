@@ -24,7 +24,7 @@ class LatencyResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
-    winner_endpoint: str | None  # URL that responded first; None when down
+    endpoint: str | None  # URL that responded first; None when down
 
 
 async def _measure(session: aiohttp.ClientSession, url: str) -> tuple[float, str] | None:
@@ -67,9 +67,9 @@ async def _check_latency(session: aiohttp.ClientSession) -> LatencyResult:
                 if result is not None:
                     latency_ms, url = result
                     log.debug("latency: winner %s at %.0fms, cancelling %d remaining", url, latency_ms, len(pending))
-                    return LatencyResult(latency_ms=latency_ms, winner_endpoint=url)
+                    return LatencyResult(latency_ms=latency_ms, endpoint=url)
         log.debug("latency: all %d endpoints failed", len(_LATENCY_PROBE_URLS))
-        return LatencyResult(latency_ms=None, winner_endpoint=None)
+        return LatencyResult(latency_ms=None, endpoint=None)
     finally:
         for task in pending:
             task.cancel()

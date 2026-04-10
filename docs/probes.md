@@ -38,7 +38,7 @@ Probe targets are **captive portal detection endpoints** — lightweight URLs th
 Detects VPN state every 10 seconds and stores only information that is directly useful for end users:
 
 - **Active/inactive** — whether traffic is currently routed through a tunnel interface
-- **Tunnel mode** — full tunnel (all traffic via VPN) vs split tunnel (only part of traffic via VPN)
+- **Tunnel mode** — full tunnel (all traffic via VPN) vs split tunnel (only part of traffic via VPN); `NULL` when VPN is inactive or routing table cannot be parsed
 - **Provider (best effort)** — VPN app name when it can be identified with sufficient confidence; otherwise `NULL`
 
 ### How VPN detection works
@@ -52,7 +52,7 @@ The detector uses a simple priority-based pipeline:
    - Parse `netstat -rn -f inet`.
    - Full tunnel if default route is via tunnel, or if OpenVPN-style `0/1` + `128.0/1` routes are via tunnel.
    - Otherwise split tunnel.
-   - If routing cannot be parsed, mode is `unknown`.
+   - If routing cannot be parsed, mode is `NULL`.
 3. **Detect provider**
    - Parse `scutil --nc list`.
    - If a service with `(Connected)` status is found, use its name as provider.

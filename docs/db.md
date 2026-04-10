@@ -11,11 +11,11 @@ SQLite database stored at `<data_dir>/netwatch.db`. All timestamps are UTC Unix 
 
 Every probe inserts a new row. No deduplication — each measurement is unique.
 
-| Column           | Type | Nullable | Description                                   |
-|------------------|------|----------|-----------------------------------------------|
-| created_at       | REAL | NO       | Probe timestamp                               |
-| latency_ms       | REAL | YES      | Round-trip time in ms; NULL when all endpoints failed |
-| winner_endpoint  | TEXT | YES      | URL that responded first; NULL when down       |
+| Column     | Type | Nullable | Description                                           |
+|------------|------|----------|-------------------------------------------------------|
+| created_at | REAL | NO       | Probe timestamp                                       |
+| latency_ms | REAL | YES      | Round-trip time in ms; NULL when all endpoints failed |
+| endpoint   | TEXT | YES      | URL that responded first; NULL when down              |
 
 Indexes: `created_at`.
 
@@ -25,8 +25,8 @@ Indexes: `created_at`.
 |-------------|---------|----------|------------------------------------------|
 | created_at  | REAL    | NO       | When this state first appeared            |
 | updated_at  | REAL    | NO       | Last time this state was confirmed        |
-| is_active   | INTEGER | NO       | 1 = VPN tunnel active, 0 = inactive      |
-| tunnel_mode | TEXT    | NO       | "full", "split", or "unknown"            |
+| is_active   | INTEGER | NO       | 1 = VPN tunnel active, 0 = inactive       |
+| tunnel_mode | TEXT    | YES      | "full" or "split"; NULL when inactive or detection failed |
 | provider    | TEXT    | YES      | VPN app name; NULL when not identified    |
 
 Indexes: `created_at`, `updated_at`.

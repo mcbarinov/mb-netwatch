@@ -65,5 +65,5 @@ class LatencyHistoryScreen(Screen[None]):
                 latency_cell = Text("down", style="bold red")
             else:
                 latency_cell = Text(f"{row.latency_ms:.0f} ms", style=latency_style(row.latency_ms, ok_ms, slow_ms))
-            endpoint = row.winner_endpoint or "-"
+            endpoint = row.endpoint or "-"
             table.add_row(ts, latency_cell, endpoint)

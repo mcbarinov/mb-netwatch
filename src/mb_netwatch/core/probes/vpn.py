@@ -8,6 +8,8 @@ import subprocess  # nosec B404
 import psutil
 from pydantic import BaseModel, ConfigDict
 
+from mb_netwatch.core.db import TunnelMode
+
 log = logging.getLogger(__name__)
 
 
@@ -17,7 +19,7 @@ class VpnStatus(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     is_active: bool  # Whether traffic is routed through a tunnel interface
-    tunnel_mode: str  # "full", "split", or "unknown"
+    tunnel_mode: TunnelMode | None  # "full"/"split"; None when inactive or detection failed
     provider: str | None  # VPN app name from scutil; None when not identified
 
 
@@ -36,18 +38,18 @@ def detect_tunnel_interface() -> tuple[str, str] | None:
     return None
 
 
-def detect_tunnel_mode(vpn_interface: str) -> str:
+def detect_tunnel_mode(vpn_interface: str) -> TunnelMode | None:
     """Determine tunnel mode by analyzing the routing table.
 
     Parses ``netstat -rn -f inet`` output. Returns ``"full"`` if default route
     or OpenVPN-style 0/1 + 128.0/1 routes go through the VPN interface,
-    ``"split"`` otherwise, or ``"unknown"`` on parse failure.
+    ``"split"`` otherwise, or ``None`` on parse failure.
     """
     try:
         output = subprocess.check_output(["netstat", "-rn", "-f", "inet"], text=True, timeout=5)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
     except (subprocess.SubprocessError, OSError) as exc:
         log.debug("vpn: netstat failed: %s", exc)
-        return "unknown"
+        return None
 
     has_0_1 = False
     has_128_0_1 = False
@@ -103,7 +105,7 @@ def check_vpn() -> VpnStatus:
     """Detect current VPN status: active/inactive, tunnel mode, and provider."""
     iface_result = detect_tunnel_interface()
     if iface_result is None:
-        return VpnStatus(is_active=False, tunnel_mode="unknown", provider=None)
+        return VpnStatus(is_active=False, tunnel_mode=None, provider=None)
 
     interface, _ip = iface_result
     tunnel_mode = detect_tunnel_mode(interface)

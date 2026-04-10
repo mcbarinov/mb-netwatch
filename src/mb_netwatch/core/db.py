@@ -3,9 +3,11 @@
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from mm_clikit import SqliteDb, SqliteRow
+
+TunnelMode = Literal["full", "split"]
 
 
 class ProbeLatency(SqliteRow):
@@ -13,12 +15,12 @@ class ProbeLatency(SqliteRow):
 
     created_at: float  # UTC Unix timestamp (seconds since epoch)
     latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
-    winner_endpoint: str | None  # URL that responded first; None when down
+    endpoint: str | None  # URL that responded first; None when down
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Self:
         """Construct from a sqlite3.Row."""
-        return cls(created_at=row["created_at"], latency_ms=row["latency_ms"], winner_endpoint=row["winner_endpoint"])
+        return cls(created_at=row["created_at"], latency_ms=row["latency_ms"], endpoint=row["endpoint"])
 
 
 class ProbeVpn(SqliteRow):
@@ -27,7 +29,7 @@ class ProbeVpn(SqliteRow):
     created_at: float  # UTC Unix timestamp when this state first appeared
     updated_at: float  # UTC Unix timestamp of most recent confirmation
     is_active: bool  # Whether traffic is routed through a tunnel interface
-    tunnel_mode: str  # "full", "split", or "unknown"
+    tunnel_mode: TunnelMode | None  # "full"/"split"; None when inactive or detection failed
     provider: str | None  # VPN app name; None when not identified
 
     @classmethod
@@ -58,13 +60,13 @@ class ProbeIp(SqliteRow):
 
 _MIGRATE_V1 = """
 CREATE TABLE probe_latency (
-    created_at REAL NOT NULL, latency_ms REAL, winner_endpoint TEXT
+    created_at REAL NOT NULL, latency_ms REAL, endpoint TEXT
 );
 CREATE INDEX idx_probe_latency_created_at ON probe_latency(created_at);
 
 CREATE TABLE probe_vpn (
     created_at REAL NOT NULL, updated_at REAL NOT NULL,
-    is_active INTEGER NOT NULL, tunnel_mode TEXT NOT NULL, provider TEXT
+    is_active INTEGER NOT NULL, tunnel_mode TEXT, provider TEXT
 );
 CREATE INDEX idx_probe_vpn_created_at ON probe_vpn(created_at);
 CREATE INDEX idx_probe_vpn_updated_at ON probe_vpn(updated_at);
@@ -92,25 +94,25 @@ class Db(SqliteDb):
 
     # -- Latency probes --------------------------------------------------------
 
-    def insert_probe_latency(self, ts: datetime, latency_ms: float | None, winner_endpoint: str | None) -> None:
+    def insert_probe_latency(self, ts: datetime, latency_ms: float | None, endpoint: str | None) -> None:
         """Insert a single latency probe result."""
         self.conn.execute(
-            "INSERT INTO probe_latency (created_at, latency_ms, winner_endpoint) VALUES (?, ?, ?)",
-            (ts.timestamp(), latency_ms, winner_endpoint),
+            "INSERT INTO probe_latency (created_at, latency_ms, endpoint) VALUES (?, ?, ?)",
+            (ts.timestamp(), latency_ms, endpoint),
         )
         self.conn.commit()
 
     def fetch_latest_probe_latency(self) -> ProbeLatency | None:
         """Return the most recent latency probe, or None if table is empty."""
         row = self.conn.execute(
-            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency ORDER BY created_at DESC LIMIT 1",
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency ORDER BY created_at DESC LIMIT 1",
         ).fetchone()
         return ProbeLatency.from_row(row) if row else None
 
     def fetch_recent_probe_latency(self, limit: int) -> list[ProbeLatency]:
         """Return the last *limit* latency probes, ordered oldest-first (for sparkline)."""
         rows = self.conn.execute(
-            "SELECT created_at, latency_ms, winner_endpoint FROM probe_latency ORDER BY created_at DESC LIMIT ?",
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [ProbeLatency.from_row(r) for r in reversed(rows)]
@@ -124,7 +126,7 @@ class Db(SqliteDb):
 
     # -- VPN probes ------------------------------------------------------------
 
-    def upsert_probe_vpn(self, ts: datetime, is_active: bool, tunnel_mode: str, provider: str | None) -> None:
+    def upsert_probe_vpn(self, ts: datetime, is_active: bool, tunnel_mode: TunnelMode | None, provider: str | None) -> None:
         """Insert or update a VPN probe result. Deduplicates consecutive identical states."""
         ts_val = ts.timestamp()
         latest = self.conn.execute(

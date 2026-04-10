@@ -35,11 +35,10 @@ def _format_status_vpn(vpn: ProbeVpn | None) -> Text:
         return Text("VPN ?", style="dim")
     if not vpn.is_active:
         return Text("VPN off", style="dim")
-    parts = ["VPN on"]
+    label = f"VPN {vpn.tunnel_mode or 'on'}"
     if vpn.provider:
-        parts.append(f"· {vpn.provider}")
-    parts.append(f"· {vpn.tunnel_mode}")
-    return Text(" ".join(parts), style="green")
+        label += f" · {vpn.provider}"
+    return Text(label, style="green")
 
 
 def _format_status_ip(ip_probe: ProbeIp | None) -> Text:

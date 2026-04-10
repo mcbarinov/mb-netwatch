@@ -45,14 +45,13 @@ class EventsWidget(VerticalScroll):
 
         for v in self._vpn_rows:
             ts = datetime.fromtimestamp(v.created_at, tz=UTC).astimezone().strftime("%H:%M:%S")
-            if v.is_active:
-                parts = ["on"]
-                if v.provider:
-                    parts.append(v.provider)
-                parts.append(v.tunnel_mode)
-                events.append((v.created_at, f"{ts}  VPN  {' '.join(parts)}"))
+            if not v.is_active:
+                label = "off"
             else:
-                events.append((v.created_at, f"{ts}  VPN  off"))
+                label = v.tunnel_mode or "on"
+                if v.provider:
+                    label += f" {v.provider}"
+            events.append((v.created_at, f"{ts}  VPN  {label}"))
 
         for ip in self._ip_rows:
             ts = datetime.fromtimestamp(ip.created_at, tz=UTC).astimezone().strftime("%H:%M:%S")

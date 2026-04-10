@@ -59,4 +59,4 @@ class VpnHistoryScreen(Screen[None]):
             ts = datetime.fromtimestamp(row.created_at, tz=UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S")
             last_seen = datetime.fromtimestamp(row.updated_at, tz=UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S")
             state = Text("on", style="green") if row.is_active else Text("off", style="dim")
-            table.add_row(ts, state, row.tunnel_mode, row.provider or "-", last_seen)
+            table.add_row(ts, state, row.tunnel_mode or "-", row.provider or "-", last_seen)

@@ -30,7 +30,7 @@ class TestProbeLatency:
         assert isinstance(row, ProbeLatency)
         assert row.created_at == pytest.approx(ts.timestamp())
         assert row.latency_ms == pytest.approx(42.5)
-        assert row.winner_endpoint == "https://example.com"
+        assert row.endpoint == "https://example.com"
 
     def test_fetch_latest_empty(self, db):
         """Empty table returns None."""
@@ -45,7 +45,7 @@ class TestProbeLatency:
         row = db.fetch_latest_probe_latency()
         assert row is not None
         assert row.latency_ms == pytest.approx(300.0)
-        assert row.winner_endpoint == "c"
+        assert row.endpoint == "c"
 
     def test_fetch_recent(self, db):
         """fetch_recent returns last N rows oldest-first."""
@@ -73,16 +73,16 @@ class TestProbeLatency:
         assert deleted == 1
         rows = db.fetch_recent_probe_latency(100)
         assert len(rows) == 1
-        assert rows[0].winner_endpoint == "recent"
+        assert rows[0].endpoint == "recent"
 
     def test_null_latency(self, db):
-        """None latency_ms and winner_endpoint stored and retrieved correctly."""
+        """None latency_ms and endpoint stored and retrieved correctly."""
         ts = datetime.now(tz=UTC)
         db.insert_probe_latency(ts, None, None)
         row = db.fetch_latest_probe_latency()
         assert row is not None
         assert row.latency_ms is None
-        assert row.winner_endpoint is None
+        assert row.endpoint is None
 
 
 # -- VPN probes ----------------------------------------------------------------
@@ -176,6 +176,19 @@ class TestProbeVpn:
         db.upsert_probe_vpn(recent, True, "full", None)  # same state — bumps updated_at
         deleted = db.purge_old_probe_vpn(retention_days=30)
         assert deleted == 0
+
+    def test_null_tunnel_mode_dedup(self, db):
+        """Consecutive inactive states with tunnel_mode=None are deduplicated."""
+        t1 = datetime.now(tz=UTC) - timedelta(seconds=10)
+        t2 = datetime.now(tz=UTC)
+        db.upsert_probe_vpn(t1, False, None, None)
+        db.upsert_probe_vpn(t2, False, None, None)
+        rows = db.fetch_recent_probe_vpn(100)
+        assert len(rows) == 1
+        assert rows[0].tunnel_mode is None
+        assert rows[0].is_active is False
+        assert rows[0].created_at == pytest.approx(t1.timestamp())
+        assert rows[0].updated_at == pytest.approx(t2.timestamp())
 
 
 # -- IP probes ----------------------------------------------------------------

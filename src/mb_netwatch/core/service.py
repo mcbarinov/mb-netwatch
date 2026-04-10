@@ -8,7 +8,7 @@ import aiohttp
 from pydantic import BaseModel, ConfigDict
 
 from mb_netwatch.config import Config
-from mb_netwatch.core.db import Db
+from mb_netwatch.core.db import Db, TunnelMode
 from mb_netwatch.core.probes.ip import IpResult, check_ip
 from mb_netwatch.core.probes.latency import check_latency
 from mb_netwatch.core.probes.vpn import check_vpn
@@ -22,9 +22,9 @@ class ProbeResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     latency_ms: float | None  # Round-trip time in milliseconds; None when down
-    winner_endpoint: str | None  # URL that responded first; None when down
+    endpoint: str | None  # URL that responded first; None when down
     vpn_active: bool  # Whether VPN tunnel is active
-    tunnel_mode: str  # "full", "split", or "unknown"
+    tunnel_mode: TunnelMode | None  # "full"/"split"; None when inactive or detection failed
     vpn_provider: str | None  # VPN app name; None when not identified
     ip: str | None  # Public IPv4 address; None when lookup failed
     country_code: str | None  # 2-letter ISO country code; None when lookup failed
@@ -60,7 +60,7 @@ class Service:
         )
         return ProbeResult(
             latency_ms=latency.latency_ms,
-            winner_endpoint=latency.winner_endpoint,
+            endpoint=latency.endpoint,
             vpn_active=vpn.is_active,
             tunnel_mode=vpn.tunnel_mode,
             vpn_provider=vpn.provider,
@@ -78,8 +78,8 @@ class Service:
 
         result = await check_latency(self._latency_session)
         ts = datetime.now(tz=UTC)
-        log.debug("latency=%s ms, endpoint=%s", result.latency_ms, result.winner_endpoint)
-        self._db.insert_probe_latency(ts, result.latency_ms, result.winner_endpoint)
+        log.debug("latency=%s ms, endpoint=%s", result.latency_ms, result.endpoint)
+        self._db.insert_probe_latency(ts, result.latency_ms, result.endpoint)
 
         # Self-healing: recreate session on failure to drop stale connections
         if result.latency_ms is None:

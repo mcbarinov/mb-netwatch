@@ -28,7 +28,7 @@ class Output(DualModeOutput):
         if result.latency_ms is None:
             lines.append("Latency: down")
         else:
-            host = urlparse(result.winner_endpoint).hostname if result.winner_endpoint else "?"
+            host = urlparse(result.endpoint).hostname if result.endpoint else "?"
             lines.append(f"Latency: {result.latency_ms:.0f}ms ({host})")
 
         # VPN
@@ -38,7 +38,8 @@ class Output(DualModeOutput):
             parts = ["VPN: active"]
             if result.vpn_provider:
                 parts.append(f"({result.vpn_provider})")
-            parts.append(f"[{result.tunnel_mode} tunnel]")
+            if result.tunnel_mode is not None:
+                parts.append(f"[{result.tunnel_mode} tunnel]")
             lines.append(" ".join(parts))
 
         # IP

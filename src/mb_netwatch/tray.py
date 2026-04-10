@@ -88,8 +88,8 @@ class NetwatchTray:
             return "VPN: ..."
         if not vpn.is_active:
             return "VPN: off"
-        # Active — show tunnel mode and optional provider
-        label = f"VPN: {vpn.tunnel_mode} tunnel"
+        # Active — show tunnel mode (if known) and optional provider
+        label = f"VPN: {vpn.tunnel_mode} tunnel" if vpn.tunnel_mode is not None else "VPN: active"
         if vpn.provider:
             label += f" ({vpn.provider})"
         return label

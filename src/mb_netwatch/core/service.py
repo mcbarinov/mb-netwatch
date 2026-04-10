@@ -78,12 +78,11 @@ class Service:
 
         result = await check_latency(self._latency_session)
         ts = datetime.now(tz=UTC)
-        log.debug("latency=%s ms, endpoint=%s", result.latency_ms, result.endpoint)
         self._db.insert_probe_latency(ts, result.latency_ms, result.endpoint)
 
         # Self-healing: recreate session on failure to drop stale connections
         if result.latency_ms is None:
-            log.debug("Latency check failed, recreating HTTP session.")
+            log.warning("Latency check failed, recreating HTTP session.")
             await self._latency_session.close()
             self._latency_session = None
 
@@ -91,7 +90,6 @@ class Service:
         """Run a single VPN check, log and store the result. Return whether VPN is active."""
         status = await asyncio.to_thread(check_vpn)
         ts = datetime.now(tz=UTC)
-        log.debug("vpn=%s, mode=%s, provider=%s", status.is_active, status.tunnel_mode, status.provider)
         self._db.upsert_probe_vpn(ts, status.is_active, status.tunnel_mode, status.provider)
         return status.is_active
 
@@ -113,7 +111,6 @@ class Service:
 
         result = await check_ip(previous=self._last_ip_result, http_timeout=self._config.probed.ip_timeout)
         ts = datetime.now(tz=UTC)
-        log.debug("ip=%s, country=%s", result.ip, result.country_code)
         self._db.upsert_probe_ip(ts, result.ip, result.country_code)
         self._last_ip_result = result
 

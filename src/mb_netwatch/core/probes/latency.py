@@ -66,9 +66,8 @@ async def _check_latency(session: aiohttp.ClientSession) -> LatencyResult:
                 result = task.result()
                 if result is not None:
                     latency_ms, url = result
-                    log.debug("latency: winner %s at %.0fms, cancelling %d remaining", url, latency_ms, len(pending))
                     return LatencyResult(latency_ms=latency_ms, endpoint=url)
-        log.debug("latency: all %d endpoints failed", len(_LATENCY_PROBE_URLS))
+        log.warning("latency: all %d endpoints failed", len(_LATENCY_PROBE_URLS))
         return LatencyResult(latency_ms=None, endpoint=None)
     finally:
         for task in pending:

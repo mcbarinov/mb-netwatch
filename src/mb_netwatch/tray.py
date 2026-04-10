@@ -3,7 +3,7 @@
 import logging
 import time
 
-from mm_clikit import setup_logging, write_pid_file
+from mm_clikit import write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.core.core import Core
@@ -39,8 +39,7 @@ class NetwatchTray:
         self._tray.set_menu([self._latency_item, self._vpn_item, self._ip_item, MenuSeparator(), quit_item])
 
     def run(self) -> None:
-        """Set up logging, write PID file, start the polling timer and enter the event loop."""
-        setup_logging("mb_netwatch", self._core.config.tray_log_path)
+        """Write PID file, start the polling timer and enter the event loop."""
         write_pid_file(self._core.config.tray_pid_path)
         try:
             self._tray.start_timer(self._core.config.tray.poll_interval, self._refresh)

@@ -5,7 +5,7 @@ import contextlib
 import logging
 import signal
 
-from mm_clikit import setup_logging, write_pid_file
+from mm_clikit import write_pid_file
 
 from mb_netwatch.core.core import Core
 
@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 
 async def run_daemon(core: Core) -> None:
     """Launch latency, VPN, IP, and purge loops; shut down cleanly on signal."""
-    setup_logging("mb_netwatch", core.config.probed_log_path)
     log.info("probed starting.")
     write_pid_file(core.config.probed_pid_path)
 
@@ -37,6 +36,10 @@ async def run_daemon(core: Core) -> None:
             tg.create_task(_vpn_loop(core, shutdown, ip_trigger))
             tg.create_task(_ip_loop(core, shutdown, ip_trigger))
             tg.create_task(_purge_loop(core, shutdown))
+    except* Exception as eg:
+        for exc in eg.exceptions:
+            log.exception("probed: fatal error in task group", exc_info=exc)
+        raise
     finally:
         await core.service.close_latency_session()
         core.config.probed_pid_path.unlink(missing_ok=True)
@@ -63,7 +66,10 @@ async def _wait_ip(shutdown: asyncio.Event, ip_trigger: asyncio.Event, seconds: 
 async def _latency_loop(core: Core, shutdown: asyncio.Event) -> None:
     """Run latency probes on interval."""
     while not shutdown.is_set():
-        await core.service.run_latency_check()
+        try:
+            await core.service.run_latency_check()
+        except Exception:
+            log.exception("latency loop: unexpected error")
         await _wait_shutdown(shutdown, core.config.probed.latency_interval)
 
 
@@ -71,12 +77,15 @@ async def _vpn_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Eve
     """Run VPN checks on interval. Signal IP loop on state change."""
     prev_active: bool | None = None
     while not shutdown.is_set():
-        is_active = await core.service.run_vpn_check()
-
-        if prev_active is not None and is_active != prev_active:
-            log.info("VPN state changed (%s -> %s), triggering immediate IP check.", prev_active, is_active)
-            ip_trigger.set()
-        prev_active = is_active
+        try:
+            is_active = await core.service.run_vpn_check()
+        except Exception:
+            log.exception("vpn loop: unexpected error")
+        else:
+            if prev_active is not None and is_active != prev_active:
+                log.info("VPN state changed (%s -> %s), triggering immediate IP check.", prev_active, is_active)
+                ip_trigger.set()
+            prev_active = is_active
 
         await _wait_shutdown(shutdown, core.config.probed.vpn_interval)
 
@@ -88,7 +97,10 @@ async def _ip_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Even
         if vpn_changed:
             ip_trigger.clear()
 
-        await core.service.run_ip_check(vpn_changed=vpn_changed)
+        try:
+            await core.service.run_ip_check(vpn_changed=vpn_changed)
+        except Exception:
+            log.exception("ip loop: unexpected error")
 
         await _wait_ip(shutdown, ip_trigger, core.config.probed.ip_interval)
 
@@ -99,7 +111,11 @@ async def _purge_loop(core: Core, shutdown: asyncio.Event) -> None:
     while not shutdown.is_set():
         await _wait_shutdown(shutdown, cfg.purge_interval)
         if not shutdown.is_set():
-            lat_deleted = core.db.purge_old_probe_latency(cfg.retention_days)
-            vpn_deleted = core.db.purge_old_probe_vpn(cfg.retention_days)
-            ip_deleted = core.db.purge_old_probe_ip(cfg.retention_days)
-            log.info("Purged %d latency, %d VPN, %d IP old probe rows.", lat_deleted, vpn_deleted, ip_deleted)
+            try:
+                lat_deleted = core.db.purge_old_probe_latency(cfg.retention_days)
+                vpn_deleted = core.db.purge_old_probe_vpn(cfg.retention_days)
+                ip_deleted = core.db.purge_old_probe_ip(cfg.retention_days)
+            except Exception:
+                log.exception("purge loop: unexpected error")
+            else:
+                log.info("Purged %d latency, %d VPN, %d IP old probe rows.", lat_deleted, vpn_deleted, ip_deleted)

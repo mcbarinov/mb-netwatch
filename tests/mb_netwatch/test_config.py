@@ -47,8 +47,7 @@ class TestDefaults:
         assert cfg.config_path == Path("/test/dir/config.toml")
         assert cfg.probed_pid_path == Path("/test/dir/probed.pid")
         assert cfg.tray_pid_path == Path("/test/dir/tray.pid")
-        assert cfg.probed_log_path == Path("/test/dir/probed.log")
-        assert cfg.tray_log_path == Path("/test/dir/tray.log")
+        assert cfg.log_path == Path("/test/dir/netwatch.log")
 
 
 class TestLatencyThresholdOrdering:

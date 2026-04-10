@@ -1,5 +1,6 @@
 """On-demand probe result screen."""
 
+import logging
 from typing import ClassVar
 from urllib.parse import urlparse
 
@@ -12,6 +13,8 @@ from textual.widgets import Static
 from mb_netwatch.core.core import Core
 from mb_netwatch.core.service import ProbeResult
 from mb_netwatch.tui.widgets.latency import latency_style
+
+log = logging.getLogger(__name__)
 
 
 def _format_latency_line(result: ProbeResult, ok_ms: int, slow_ms: int) -> Text:
@@ -94,6 +97,7 @@ class ProbeResultScreen(Screen[None]):
         try:
             result = await self._core.service.run_probe()
         except Exception as e:
+            log.exception("on-demand probe failed")
             self._render_error(str(e))
             return
         self._render_result(result)

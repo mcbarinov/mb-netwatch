@@ -105,6 +105,7 @@ class Config(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Base directory for all application data")
+    debug: bool = Field(default=False, description="Enable DEBUG level in the log file")
     probed: ProbedConfig = Field(default_factory=ProbedConfig)
     latency_threshold: LatencyThresholdConfig = Field(default_factory=LatencyThresholdConfig)
     tray: TrayConfig = Field(default_factory=TrayConfig)
@@ -136,29 +137,25 @@ class Config(BaseModel):
 
     @computed_field
     @cached_property
-    def probed_log_path(self) -> Path:
-        """Log file for the probed process."""
-        return self.data_dir / "probed.log"
-
-    @computed_field
-    @cached_property
-    def tray_log_path(self) -> Path:
-        """Log file for the tray process."""
-        return self.data_dir / "tray.log"
+    def log_path(self) -> Path:
+        """Unified log file shared by probed, tray, and TUI."""
+        return self.data_dir / "netwatch.log"
 
     def cli_base_args(self) -> list[str]:
-        """Build CLI base args, including --data-dir only when non-default.
+        """Build CLI base args, including --data-dir and --debug when non-default.
 
         Useful for spawning subprocesses (daemons, workers) that need
-        to inherit the data directory setting.
+        to inherit the data directory and debug setting.
         """
         args: list[str] = ["mb-netwatch"]
         if self.data_dir != DEFAULT_DATA_DIR:
             args.extend(["--data-dir", str(self.data_dir)])
+        if self.debug:
+            args.append("--debug")
         return args
 
     @staticmethod
-    def build(data_dir: Path | None = None) -> Config:
+    def build(data_dir: Path | None = None, *, debug: bool = False) -> Config:
         """Build a Config from CLI arg / env var / default, with optional TOML overlay.
 
         Raises ValueError on invalid values or unknown TOML keys.
@@ -171,7 +168,7 @@ class Config(BaseModel):
             resolved = DEFAULT_DATA_DIR
 
         config_path = resolved / "config.toml"
-        kwargs: dict[str, Any] = {"data_dir": resolved}
+        kwargs: dict[str, Any] = {"data_dir": resolved, "debug": debug}
 
         if config_path.exists():
             with config_path.open("rb") as f:

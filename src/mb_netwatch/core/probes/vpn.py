@@ -23,18 +23,17 @@ class VpnStatus(BaseModel):
     provider: str | None  # VPN app name from scutil; None when not identified
 
 
-def detect_tunnel_interface() -> tuple[str, str] | None:
+def detect_tunnel_interface() -> str | None:
     """Find first tun/utun interface with an IPv4 address.
 
-    Returns (interface_name, ip_address) or None if no tunnel interface found.
+    Returns the interface name or None if no tunnel interface found.
+    The IPv4 address presence is still required as a liveness check.
     """
     for name, addrs in psutil.net_if_addrs().items():
         if name.startswith(("tun", "utun")):
             for addr in addrs:
                 if addr.family == socket.AF_INET and addr.address:
-                    log.debug("vpn: found tunnel interface %s with IP %s", name, addr.address)
-                    return name, addr.address
-    log.debug("vpn: no tunnel interface found")
+                    return name
     return None
 
 
@@ -48,7 +47,7 @@ def detect_tunnel_mode(vpn_interface: str) -> TunnelMode | None:
     try:
         output = subprocess.check_output(["netstat", "-rn", "-f", "inet"], text=True, timeout=5)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
     except (subprocess.SubprocessError, OSError) as exc:
-        log.debug("vpn: netstat failed: %s", exc)
+        log.warning("vpn: netstat failed: %s", exc)
         return None
 
     has_0_1 = False
@@ -87,7 +86,7 @@ def detect_provider() -> str | None:
     try:
         output = subprocess.check_output(["scutil", "--nc", "list"], text=True, timeout=5)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
     except (subprocess.SubprocessError, OSError) as exc:
-        log.debug("vpn: scutil failed: %s", exc)
+        log.warning("vpn: scutil failed: %s", exc)
         return None
 
     for line in output.splitlines():
@@ -103,11 +102,10 @@ def detect_provider() -> str | None:
 
 def check_vpn() -> VpnStatus:
     """Detect current VPN status: active/inactive, tunnel mode, and provider."""
-    iface_result = detect_tunnel_interface()
-    if iface_result is None:
+    interface = detect_tunnel_interface()
+    if interface is None:
         return VpnStatus(is_active=False, tunnel_mode=None, provider=None)
 
-    interface, _ip = iface_result
     tunnel_mode = detect_tunnel_mode(interface)
     provider = detect_provider()
 

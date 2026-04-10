@@ -57,7 +57,7 @@ async def _race_urls(session: aiohttp.ClientSession, urls: list[str]) -> str | N
                 text = task.result()
                 if text:
                     return text
-        log.debug("ip: all %d urls failed or returned empty", len(urls))
+        log.warning("ip: all %d urls failed or returned empty", len(urls))
         return None
     finally:
         for task in pending:
@@ -82,7 +82,6 @@ async def _check_ip(session: aiohttp.ClientSession, previous: IpResult | None) -
     """Detect IP, then resolve country."""
     # Step 1: detect IP by racing 2 random services
     selected = random.sample(_IP_SERVICES, 2)
-    log.debug("ip: racing services %s", selected)
     ip_text = await _race_urls(session, selected)
 
     ip: str | None = None
@@ -95,7 +94,6 @@ async def _check_ip(session: aiohttp.ClientSession, previous: IpResult | None) -
             ip = ip_text
 
     if ip is None:
-        log.debug("ip: no valid IP detected")
         return IpResult(ip=None, country_code=None)
 
     # Reuse country code when IP hasn't changed
@@ -104,7 +102,6 @@ async def _check_ip(session: aiohttp.ClientSession, previous: IpResult | None) -
 
     # Step 2: resolve country by racing geo services
     country_urls = [url.format(ip=ip) for url in _IP_COUNTRY_SERVICES]
-    log.debug("ip: resolving country for %s", ip)
     country_text = await _race_urls(session, country_urls)
 
     country_code: str | None = None

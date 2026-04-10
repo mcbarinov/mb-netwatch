@@ -69,7 +69,7 @@ class NetwatchTray:
             symbol = "\u2013"
         else:
             symbol = self._latency_band(latency.latency_ms)
-        country = ip.country_code if ip and not stale and latency is not None else "  "
+        country = ip.country_code if ip and ip.country_code and not stale and latency is not None else "  "
         return f"{country}{symbol}"
 
     def _format_latency(self, latency: ProbeLatency | None, *, stale: bool) -> str:

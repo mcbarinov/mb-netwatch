@@ -9,8 +9,11 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Static
 
-from mb_netwatch.config import Config
-from mb_netwatch.core.db import Db, ProbeIp, ProbeLatency, ProbeVpn
+from mb_netwatch.core.core import Core
+from mb_netwatch.core.db import ProbeIp, ProbeLatency, ProbeVpn
+from mb_netwatch.tui.screens.ip_history import IpHistoryScreen
+from mb_netwatch.tui.screens.latency_history import LatencyHistoryScreen
+from mb_netwatch.tui.screens.vpn_history import VpnHistoryScreen
 from mb_netwatch.tui.widgets.events import EventsWidget
 from mb_netwatch.tui.widgets.latency import LatencyWidget, latency_style
 
@@ -68,14 +71,16 @@ class TuiApp(App[None]):
     """
 
     BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        Binding("l", "show_latency_history", "Latency"),
+        Binding("v", "show_vpn_history", "VPN"),
+        Binding("i", "show_ip_history", "IP"),
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, db: Db, config: Config) -> None:
-        """Initialize TUI with database and config references."""
+    def __init__(self, core: Core) -> None:
+        """Initialize TUI with the application core."""
         super().__init__()
-        self._db = db  # Database access layer
-        self._config = config  # Application configuration
+        self._core = core  # Shared application services (db, config)
 
     def compose(self) -> ComposeResult:
         """Build the widget tree."""
@@ -87,19 +92,21 @@ class TuiApp(App[None]):
     def on_mount(self) -> None:
         """Start periodic data refresh on mount."""
         self._refresh_data()
-        self.set_interval(self._config.tui.poll_interval, self._refresh_data)
+        self.set_interval(self._core.config.tui.poll_interval, self._refresh_data)
 
     def _refresh_data(self) -> None:
         """Poll DB and update all widgets."""
-        ok_ms = self._config.latency_threshold.ok_ms
-        slow_ms = self._config.latency_threshold.slow_ms
+        config = self._core.config
+        db = self._core.db
+        ok_ms = config.latency_threshold.ok_ms
+        slow_ms = config.latency_threshold.slow_ms
 
-        latency = self._db.fetch_latest_probe_latency()
-        vpn = self._db.fetch_latest_probe_vpn()
-        ip_probe = self._db.fetch_latest_probe_ip()
-        recent_vpn = self._db.fetch_recent_probe_vpn(10)
-        recent_ip = self._db.fetch_recent_probe_ip(10)
-        stale = latency is not None and (time.time() - latency.created_at) > self._config.latency_threshold.stale_seconds
+        latency = db.fetch_latest_probe_latency()
+        vpn = db.fetch_latest_probe_vpn()
+        ip_probe = db.fetch_latest_probe_ip()
+        recent_vpn = db.fetch_recent_probe_vpn(10)
+        recent_ip = db.fetch_recent_probe_ip(10)
+        stale = latency is not None and (time.time() - latency.created_at) > config.latency_threshold.stale_seconds
 
         status = Text("mb-netwatch", style="bold")
         status.append("    ")
@@ -115,8 +122,8 @@ class TuiApp(App[None]):
 
         latency_widget = self.query_one(LatencyWidget)
         content_width = latency_widget.content_width
-        fetch_count = min(content_width, self._config.tui.latency_history_max) if content_width > 0 else 60
-        history = self._db.fetch_recent_probe_latency(fetch_count)
+        fetch_count = min(content_width, config.tui.latency_history_max) if content_width > 0 else 60
+        history = db.fetch_recent_probe_latency(fetch_count)
         latency_widget.update_data(history, ok_ms, slow_ms)
 
         self.query_one(EventsWidget).update_data(recent_vpn, recent_ip)
@@ -124,12 +131,12 @@ class TuiApp(App[None]):
         pid_status = self._get_probed_status()
         footer_text = Text()
         footer_text.append_text(pid_status)
-        footer_text.append("q quit", style="dim")
+        footer_text.append("l latency  v vpn  i ip  q quit", style="dim")
         self.query_one("#footer-bar", Static).update(footer_text)
 
     def _get_probed_status(self) -> Text:
         """Check if probed is running via PID file."""
-        pid_path = self._config.probed_pid_path
+        pid_path = self._core.config.probed_pid_path
         if not pid_path.exists():
             return Text("probed: not running    ", style="dim red")
         try:
@@ -138,3 +145,15 @@ class TuiApp(App[None]):
             return Text(f"probed: running · pid {pid}    ", style="dim green")
         except ValueError, ProcessLookupError, PermissionError, OSError:
             return Text("probed: not running    ", style="dim red")
+
+    def action_show_latency_history(self) -> None:
+        """Open the latency history screen."""
+        self.push_screen(LatencyHistoryScreen(self._core))
+
+    def action_show_vpn_history(self) -> None:
+        """Open the VPN history screen."""
+        self.push_screen(VpnHistoryScreen(self._core))
+
+    def action_show_ip_history(self) -> None:
+        """Open the IP history screen."""
+        self.push_screen(IpHistoryScreen(self._core))

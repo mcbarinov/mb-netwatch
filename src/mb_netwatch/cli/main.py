@@ -32,7 +32,7 @@ def main(
     ctx.obj = CoreContext(core=core, out=Output())
 
     if ctx.invoked_subcommand is None:
-        TuiApp(db=core.db, config=config).run()
+        TuiApp(core).run()
 
 
 app.command(aliases=["p"])(probe)

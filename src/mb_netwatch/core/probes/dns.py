@@ -43,12 +43,32 @@ class DnsResult(BaseModel):
 
 
 def _parse_scutil_dns(text: str) -> list[str]:
-    """Extract nameservers of `resolver #1` from the main `DNS configuration` section."""
+    """Extract the system's effective DNS nameservers from `scutil --dns` output.
+
+    Preference order:
+    1. Nameservers of `resolver #1` in the main `DNS configuration` section — the normal case.
+    2. Fallback: interface-scoped resolvers in the `(for scoped queries)` section, used when
+       the main default resolver has no nameservers. Some VPNs (e.g. Happ Plus) only publish
+       their DNS via per-interface scoping, leaving the main default resolver empty.
+       Domain-scoped entries (those with a `domain :` line, like `.local` mDNS) are ignored.
+    """
+    lines = text.splitlines()
+    main_nameservers = _parse_main_resolver_1(lines)
+    if main_nameservers:
+        return main_nameservers
+    fallback = _parse_scoped_interface_nameservers(lines)
+    if fallback:
+        log.debug("dns: main resolver empty, using %d scoped interface nameserver(s)", len(fallback))
+    return fallback
+
+
+def _parse_main_resolver_1(lines: list[str]) -> list[str]:
+    """Collect `nameserver[]` entries from `resolver #1` in the main `DNS configuration` section."""
     in_main = False
     in_resolver_1 = False
     nameservers: list[str] = []
 
-    for raw in text.splitlines():
+    for raw in lines:
         line = raw.strip()
 
         # Scoped-queries section follows the main one — stop before it.
@@ -78,6 +98,51 @@ def _parse_scutil_dns(text: str) -> list[str]:
             addr = addr.strip()
             if addr:
                 nameservers.append(addr)
+
+    return nameservers
+
+
+def _parse_scoped_interface_nameservers(lines: list[str]) -> list[str]:
+    """Collect `nameserver[]` entries from interface-scoped resolvers in the scoped-queries section.
+
+    A resolver block is considered interface-scoped (and thus usable as a fallback default) when
+    it has no `domain :` line. Domain-scoped entries serve per-domain lookups only and are skipped.
+    """
+    in_scoped = False
+    nameservers: list[str] = []
+    block_nameservers: list[str] = []
+    block_has_domain = False
+
+    for raw in lines:
+        line = raw.strip()
+
+        if line.startswith("DNS configuration (for scoped"):
+            in_scoped = True
+            continue
+
+        if not in_scoped:
+            continue
+
+        if line.startswith("resolver #"):
+            # Flush the previous block before starting a new one.
+            if block_nameservers and not block_has_domain:
+                nameservers.extend(block_nameservers)
+            block_nameservers = []
+            block_has_domain = False
+            continue
+
+        if line.startswith("nameserver["):
+            _, _, addr = line.partition(":")
+            addr = addr.strip()
+            if addr:
+                block_nameservers.append(addr)
+        elif line.startswith("domain "):
+            # `domain : foo` — per-domain scope. Not `search domain[N]`, which starts with "search".
+            block_has_domain = True
+
+    # Flush the final block.
+    if block_nameservers and not block_has_domain:
+        nameservers.extend(block_nameservers)
 
     return nameservers
 

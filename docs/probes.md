@@ -87,12 +87,13 @@ The probe measures **latency of the system's own DNS resolvers**, not of public 
 
 **How resolver discovery works:**
 1. Run `scutil --dns` and read its output. This is the authoritative source of macOS DNS configuration — `/etc/resolv.conf` is a legacy shim and does not reflect the real resolver set (especially under VPN).
-2. Locate the first `DNS configuration` section (not `DNS configuration (for scoped queries)` — scoped resolvers handle per-interface or per-domain lookups like `.local` mDNS and are not used for general resolution).
-3. Inside that section, locate `resolver #1` — the default resolver. Collect every `nameserver[N] : ADDRESS` line from that block. `resolver #2`, `#3` and so on are per-domain scopes (e.g. `.local`) and are ignored.
-4. If no nameservers can be found, the probe reports an empty resolver list. An empty list is itself a diagnostic signal: the system has no DNS configuration (no network, broken `configd`, etc.).
+2. Locate the main `DNS configuration` section (not `DNS configuration (for scoped queries)`, which comes after it).
+3. Inside that section, locate `resolver #1` — the default resolver. Collect every `nameserver[N] : ADDRESS` line from that block. `resolver #2`, `#3` and so on in the main section are per-domain scopes (e.g. `.local`, `ip6.arpa`) and are ignored.
+4. **Fallback for VPNs that only publish DNS via per-interface scoping** (observed with clients like Happ Plus): if `resolver #1` in the main section has no `nameserver[]` entries, walk the `(for scoped queries)` section and collect `nameserver[]` entries from every resolver block that does *not* have a `domain :` line. Domain-scoped blocks are always ignored because they only serve lookups matching that specific domain. Interface-scoped blocks (those tagged with `if_index : N (ifN)`) represent the effective DNS for all traffic going out that interface, and when the main default resolver is empty they are what macOS is actually using.
+5. If neither pass finds any nameservers, the probe reports an empty resolver list. An empty list is itself a diagnostic signal: the system has no DNS configuration (no network, broken `configd`, etc.).
 
 **How probing works:**
-1. For each nameserver from step 3 above, build a DNS query for the canary record `A cloudflare.com` and send it over UDP directly to that nameserver. All nameservers are probed **in parallel** — in the typical single-resolver case this collapses to one query; in multi-resolver setups it captures the "primary dead, fallback alive" scenario that a primary-only probe would miss.
+1. For each nameserver discovered in steps 3–4 above, build a DNS query for the canary record `A cloudflare.com` and send it over UDP directly to that nameserver. All nameservers are probed **in parallel** — in the typical single-resolver case this collapses to one query; in multi-resolver setups it captures the "primary dead, fallback alive" scenario that a primary-only probe would miss.
 2. Round-trip time is measured with a wall-clock timer around the UDP exchange. Each nameserver's result is independent: a `resolve_ms` value on success, or one of the error categories below on failure.
 3. If a nameserver does not respond within 2 seconds the result is recorded as `timeout`. Other failure categories: `network` (socket error, e.g. unreachable through a down VPN tunnel), `malformed` (response unparseable), `servfail` / `refused` / `nxdomain` / ... (resolver replied with a non-success rcode — `resolve_ms` is still recorded because the exchange completed).
 4. There are **no retries and no TCP fallback**. The probe measures a single UDP round-trip per resolver per cycle. Retries would mask the very degradation the probe exists to detect.
@@ -107,4 +108,4 @@ The probe measures **latency of the system's own DNS resolvers**, not of public 
 - **Correctness of the answer** — no IP comparison, no DNSSEC validation, no hijack detection. The probe cares about latency and reachability only.
 - **AAAA records** — only A is queried. Dual-stack measurement would double the data without adding useful failure signal for this use case.
 - **Public resolvers** (`1.1.1.1`, `8.8.8.8`, etc.) — they measure a different path than what the system actually uses.
-- **Scoped resolvers** from the `DNS configuration (for scoped queries)` section of `scutil --dns` output — these serve per-domain lookups (e.g. `.local` mDNS) and do not reflect general DNS.
+- **Domain-scoped resolvers** (any resolver block in `scutil --dns` output that carries a `domain :` line, whether in the main or the scoped-queries section) — these serve only lookups matching that specific domain (e.g. `.local` mDNS, `ip6.arpa` reverse zones) and do not reflect general DNS.

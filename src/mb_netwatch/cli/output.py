@@ -50,6 +50,18 @@ class Output(DualModeOutput):
         else:
             lines.append(f"IP: {result.ip}")
 
+        # DNS
+        if not result.dns_resolvers:
+            lines.append("DNS: unknown")
+        else:
+            dns_parts: list[str] = []
+            for r in result.dns_resolvers:
+                if r.error is not None:
+                    dns_parts.append(f"{r.error} ({r.address})")
+                elif r.resolve_ms is not None:
+                    dns_parts.append(f"{r.resolve_ms:.0f}ms ({r.address})")
+            lines.append("DNS: " + ", ".join(dns_parts))
+
         self.output(json_data=result.model_dump(), display_data="\n".join(lines))
 
     def print_start_stop(self, result: StartStopResult) -> None:

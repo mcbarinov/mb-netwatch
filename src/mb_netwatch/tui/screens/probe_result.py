@@ -54,6 +54,29 @@ def _format_ip_line(result: ProbeResult) -> Text:
     return text
 
 
+def _format_dns_line(result: ProbeResult) -> Text:
+    """Format the DNS line from a live ProbeResult.
+
+    Shows the primary resolver only; a `+N` hint signals additional resolvers
+    when the system has multiple (rare outside corporate / dual-homed setups).
+    """
+    text = Text("DNS:      ", style="bold")
+    if not result.dns_resolvers:
+        text.append("unknown", style="dim")
+        return text
+    primary = result.dns_resolvers[0]
+    if primary.error is not None:
+        text.append(primary.error, style="bold red")
+    elif primary.resolve_ms is not None:
+        text.append(f"{primary.resolve_ms:.0f} ms")
+    else:
+        text.append("unknown", style="dim")
+    text.append(f"  ({primary.address})", style="dim")
+    if len(result.dns_resolvers) > 1:
+        text.append(f"  +{len(result.dns_resolvers) - 1}", style="dim")
+    return text
+
+
 class ProbeResultScreen(Screen[None]):
     """Run all probes on demand and display the live result."""
 
@@ -103,11 +126,12 @@ class ProbeResultScreen(Screen[None]):
         self._render_result(result)
 
     def _render_loading(self) -> None:
-        """Show the 'running…' placeholder for all three lines."""
+        """Show the 'running…' placeholder for all probe lines."""
         text = Text()
         text.append("Latency:  running…\n", style="dim")
         text.append("VPN:      running…\n", style="dim")
-        text.append("IP:       running…", style="dim")
+        text.append("IP:       running…\n", style="dim")
+        text.append("DNS:      running…", style="dim")
         self.query_one("#probe-body", Static).update(text)
 
     def _render_result(self, result: ProbeResult) -> None:
@@ -120,6 +144,8 @@ class ProbeResultScreen(Screen[None]):
         text.append_text(_format_vpn_line(result))
         text.append("\n")
         text.append_text(_format_ip_line(result))
+        text.append("\n")
+        text.append_text(_format_dns_line(result))
         self.query_one("#probe-body", Static).update(text)
 
     def _render_error(self, message: str) -> None:

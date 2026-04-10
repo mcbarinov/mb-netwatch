@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from mb_netwatch.config import Config
 from mb_netwatch.core.db import Db, TunnelMode
+from mb_netwatch.core.probes.dns import DnsResolverSample, check_dns
 from mb_netwatch.core.probes.ip import IpResult, check_ip
 from mb_netwatch.core.probes.latency import check_latency
 from mb_netwatch.core.probes.vpn import check_vpn
@@ -28,6 +29,7 @@ class ProbeResult(BaseModel):
     vpn_provider: str | None  # VPN app name; None when not identified
     ip: str | None  # Public IPv4 address; None when lookup failed
     country_code: str | None  # 2-letter ISO country code; None when lookup failed
+    dns_resolvers: list[DnsResolverSample]  # System DNS resolvers with measurements; [0] is primary; empty = no DNS config
 
 
 class Service:
@@ -53,10 +55,11 @@ class Service:
 
     async def run_probe(self) -> ProbeResult:
         """Run all checks concurrently and return a combined result."""
-        latency, vpn, ip_result = await asyncio.gather(
+        latency, vpn, ip_result, dns_result = await asyncio.gather(
             check_latency(http_timeout=self._config.probed.latency_timeout),
             asyncio.to_thread(check_vpn),
             check_ip(http_timeout=self._config.probed.ip_timeout),
+            check_dns(),
         )
         return ProbeResult(
             latency_ms=latency.latency_ms,
@@ -66,6 +69,7 @@ class Service:
             vpn_provider=vpn.provider,
             ip=ip_result.ip,
             country_code=ip_result.country_code,
+            dns_resolvers=dns_result.resolvers,
         )
 
     # -- Daemon check methods --------------------------------------------------

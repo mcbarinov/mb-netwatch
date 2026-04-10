@@ -13,6 +13,7 @@ from mb_netwatch.core.core import Core
 from mb_netwatch.core.db import ProbeIp, ProbeLatency, ProbeVpn
 from mb_netwatch.tui.screens.ip_history import IpHistoryScreen
 from mb_netwatch.tui.screens.latency_history import LatencyHistoryScreen
+from mb_netwatch.tui.screens.probe_result import ProbeResultScreen
 from mb_netwatch.tui.screens.vpn_history import VpnHistoryScreen
 from mb_netwatch.tui.widgets.events import EventsWidget
 from mb_netwatch.tui.widgets.latency import LatencyWidget, latency_style
@@ -74,6 +75,7 @@ class TuiApp(App[None]):
         Binding("l", "show_latency_history", "Latency"),
         Binding("v", "show_vpn_history", "VPN"),
         Binding("i", "show_ip_history", "IP"),
+        Binding("r", "run_probes_now", "Run now"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -131,7 +133,7 @@ class TuiApp(App[None]):
         pid_status = self._get_probed_status()
         footer_text = Text()
         footer_text.append_text(pid_status)
-        footer_text.append("l latency  v vpn  i ip  q quit", style="dim")
+        footer_text.append("l latency  v vpn  i ip  r run  q quit", style="dim")
         self.query_one("#footer-bar", Static).update(footer_text)
 
     def _get_probed_status(self) -> Text:
@@ -157,3 +159,7 @@ class TuiApp(App[None]):
     def action_show_ip_history(self) -> None:
         """Open the IP history screen."""
         self.push_screen(IpHistoryScreen(self._core))
+
+    def action_run_probes_now(self) -> None:
+        """Open the on-demand probe result screen."""
+        self.push_screen(ProbeResultScreen(self._core))

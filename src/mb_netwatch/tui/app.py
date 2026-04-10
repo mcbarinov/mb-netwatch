@@ -58,6 +58,7 @@ class TuiApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
+        overflow: hidden;
     }
     #status-row {
         height: 1;

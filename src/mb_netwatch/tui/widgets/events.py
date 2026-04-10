@@ -3,20 +3,22 @@
 from datetime import UTC, datetime
 
 from rich.text import Text
-from textual.widget import Widget
+from textual.app import ComposeResult
+from textual.containers import VerticalScroll
+from textual.widgets import Static
 
 from mb_netwatch.core.db import ProbeIp, ProbeVpn
 
 
-class EventsWidget(Widget):
-    """Merged VPN/IP events list, newest first."""
+class EventsWidget(VerticalScroll):
+    """Merged VPN/IP events list, newest first. Scrolls internally when overflowing."""
 
     DEFAULT_CSS = """
     EventsWidget {
         border: round $accent;
         border-title-color: $text;
         padding: 0 1;
-        min-height: 4;
+        height: 1fr;
     }
     """
 
@@ -27,14 +29,18 @@ class EventsWidget(Widget):
         self._vpn_rows: list[ProbeVpn] = []  # Recent VPN probe results
         self._ip_rows: list[ProbeIp] = []  # Recent IP probe results
 
+    def compose(self) -> ComposeResult:
+        """Create the inner static that holds rendered events."""
+        yield Static(id="events-body")
+
     def update_data(self, vpn_rows: list[ProbeVpn], ip_rows: list[ProbeIp]) -> None:
-        """Set new event data and trigger re-render."""
+        """Set new event data and update the inner static."""
         self._vpn_rows = vpn_rows
         self._ip_rows = ip_rows
-        self.refresh()
+        self.query_one("#events-body", Static).update(self._build_text())
 
-    def render(self) -> Text:
-        """Render merged events list, newest first."""
+    def _build_text(self) -> Text:
+        """Build merged events list text, newest first."""
         events: list[tuple[float, str]] = []
 
         for v in self._vpn_rows:
@@ -44,21 +50,21 @@ class EventsWidget(Widget):
                 if v.provider:
                     parts.append(v.provider)
                 parts.append(v.tunnel_mode)
-                events.append((v.created_at, f"  {ts}  VPN  {' '.join(parts)}"))
+                events.append((v.created_at, f"{ts}  VPN  {' '.join(parts)}"))
             else:
-                events.append((v.created_at, f"  {ts}  VPN  off"))
+                events.append((v.created_at, f"{ts}  VPN  off"))
 
         for ip in self._ip_rows:
             ts = datetime.fromtimestamp(ip.created_at, tz=UTC).astimezone().strftime("%H:%M:%S")
             if ip.ip:
                 cc = f" ({ip.country_code})" if ip.country_code else ""
-                events.append((ip.created_at, f"  {ts}  IP   {ip.ip}{cc}"))
+                events.append((ip.created_at, f"{ts}  IP   {ip.ip}{cc}"))
             else:
-                events.append((ip.created_at, f"  {ts}  IP   ?"))
+                events.append((ip.created_at, f"{ts}  IP   ?"))
 
         events.sort(key=lambda e: e[0], reverse=True)
 
         if not events:
-            return Text("  no events", style="dim")
+            return Text("no events", style="dim")
 
         return Text("\n".join(line for _, line in events))

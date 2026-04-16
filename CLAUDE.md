@@ -24,3 +24,10 @@ Before your first response:
 3. In your first reply, list every file you have read from this document.
 
 Failure to follow this protocol is considered an error.
+
+## Testing the app
+
+The user may have a real app running. NEVER run `mb-netwatch` commands against the default data directory.
+For any manual verification, use `--data-dir ~/.claude/scratch/mb-netwatch/data-dir`.
+This lives under the pre-authorized scratch directory (see `~/.claude/shared-rules/general.md` rule #6),
+so you can create, read, and delete files there without asking for permission.

@@ -1,15 +1,12 @@
 """Application settings and user-facing configuration."""
 
-import os
 import tomllib
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
+from mm_clikit import BaseDataDirConfig
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
-
-DEFAULT_DATA_DIR = Path.home() / ".local" / "mb-netwatch"
-"""Fallback data directory when neither --data-dir nor env var is set."""
 
 
 class ProbedConfig(BaseModel):
@@ -90,11 +87,10 @@ class TuiConfig(BaseModel):
     latency_history_max: int = Field(default=300, gt=0)
 
 
-class Config(BaseModel):
+class Config(BaseDataDirConfig):
     """Top-level application configuration.
 
     Args:
-        data_dir: base directory for all application data (DB, config, PID files, logs).
         probed: background measurement daemon settings.
         latency_threshold: latency classification thresholds for display.
         tray: menu bar UI settings.
@@ -102,9 +98,10 @@ class Config(BaseModel):
 
     """
 
+    app_name: ClassVar[str] = "mb-netwatch"
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Base directory for all application data")
     debug: bool = Field(default=False, description="Enable DEBUG level in the log file")
     probed: ProbedConfig = Field(default_factory=ProbedConfig)
     latency_threshold: LatencyThresholdConfig = Field(default_factory=LatencyThresholdConfig)
@@ -141,15 +138,9 @@ class Config(BaseModel):
         """Unified log file shared by probed, tray, and TUI."""
         return self.data_dir / "netwatch.log"
 
-    def cli_base_args(self) -> list[str]:
-        """Build CLI base args, including --data-dir and --debug when non-default.
-
-        Useful for spawning subprocesses (daemons, workers) that need
-        to inherit the data directory and debug setting.
-        """
-        args: list[str] = ["mb-netwatch"]
-        if self.data_dir != DEFAULT_DATA_DIR:
-            args.extend(["--data-dir", str(self.data_dir)])
+    def base_argv(self) -> list[str]:
+        """Extend inherited argv with --debug when set."""
+        args = super().base_argv()
         if self.debug:
             args.append("--debug")
         return args
@@ -160,12 +151,7 @@ class Config(BaseModel):
 
         Raises ValueError on invalid values or unknown TOML keys.
         """
-        if data_dir is not None:
-            resolved = data_dir.resolve()
-        elif env := os.environ.get("MB_NETWATCH_DATA_DIR"):
-            resolved = Path(env).resolve()
-        else:
-            resolved = DEFAULT_DATA_DIR
+        resolved = Config.resolve_data_dir(data_dir)
 
         config_path = resolved / "config.toml"
         kwargs: dict[str, Any] = {"data_dir": resolved, "debug": debug}
@@ -184,6 +170,4 @@ class Config(BaseModel):
             kwargs["tray"] = TrayConfig(**data.get("tray", {}))
             kwargs["tui"] = TuiConfig(**data.get("tui", {}))
 
-        cfg = Config(**kwargs)
-        cfg.data_dir.mkdir(parents=True, exist_ok=True)
-        return cfg
+        return Config(**kwargs)

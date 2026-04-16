@@ -11,9 +11,9 @@ from mb_netwatch.config import Config
 class TestDefaults:
     """Default Config values and computed paths."""
 
-    def test_default_intervals(self):
+    def test_default_intervals(self, tmp_path):
         """Default probed intervals match documented values."""
-        cfg = Config()
+        cfg = Config(data_dir=tmp_path)
         assert cfg.probed.latency_interval == 2.0
         assert cfg.probed.vpn_interval == 10.0
         assert cfg.probed.ip_interval == 60.0
@@ -22,21 +22,21 @@ class TestDefaults:
         assert cfg.probed.ip_timeout == 5.0
         assert cfg.probed.retention_days == 30
 
-    def test_default_latency_threshold(self):
+    def test_default_latency_threshold(self, tmp_path):
         """Default latency threshold settings."""
-        cfg = Config()
+        cfg = Config(data_dir=tmp_path)
         assert cfg.latency_threshold.ok_ms == 300
         assert cfg.latency_threshold.slow_ms == 800
         assert cfg.latency_threshold.stale_seconds == 10.0
 
-    def test_default_tray(self):
+    def test_default_tray(self, tmp_path):
         """Default tray settings."""
-        cfg = Config()
+        cfg = Config(data_dir=tmp_path)
         assert cfg.tray.poll_interval == 2.0
 
-    def test_default_tui(self):
+    def test_default_tui(self, tmp_path):
         """Default TUI settings."""
-        cfg = Config()
+        cfg = Config(data_dir=tmp_path)
         assert cfg.tui.poll_interval == 0.5
         assert cfg.tui.latency_history_max == 300
 
@@ -63,15 +63,15 @@ class TestLatencyThresholdOrdering:
             (1, 2, True),
         ],
     )
-    def test_threshold_ordering(self, ok, slow, should_pass):
+    def test_threshold_ordering(self, ok, slow, should_pass, tmp_path):
         """Threshold ordering validation accepts valid, rejects invalid."""
         if should_pass:
-            cfg = Config(latency_threshold={"ok_ms": ok, "slow_ms": slow})
+            cfg = Config(data_dir=tmp_path, latency_threshold={"ok_ms": ok, "slow_ms": slow})
             assert cfg.latency_threshold.ok_ms == ok
             assert cfg.latency_threshold.slow_ms == slow
         else:
             with pytest.raises(ValidationError, match="ok_ms"):
-                Config(latency_threshold={"ok_ms": ok, "slow_ms": slow})
+                Config(data_dir=tmp_path, latency_threshold={"ok_ms": ok, "slow_ms": slow})
 
 
 class TestFieldValidation:
@@ -95,21 +95,21 @@ class TestFieldValidation:
             ("tui", "poll_interval", 0),
         ],
     )
-    def test_zero_and_negative_values_rejected(self, section, field, value):
+    def test_zero_and_negative_values_rejected(self, section, field, value, tmp_path):
         """Zero and negative values for gt=0 fields raise ValidationError."""
         with pytest.raises(ValidationError):
-            Config(**{section: {field: value}})
+            Config(data_dir=tmp_path, **{section: {field: value}})
 
     @pytest.mark.parametrize("section", ["probed", "latency_threshold", "tray", "tui"])
-    def test_extra_fields_forbidden(self, section):
+    def test_extra_fields_forbidden(self, section, tmp_path):
         """Unknown keys within a known section raise ValidationError."""
         with pytest.raises(ValidationError):
-            Config(**{section: {"nonexistent_key": 42}})
+            Config(data_dir=tmp_path, **{section: {"nonexistent_key": 42}})
 
-    def test_extra_top_level_field_forbidden(self):
+    def test_extra_top_level_field_forbidden(self, tmp_path):
         """Unknown top-level field raises ValidationError."""
         with pytest.raises(ValidationError):
-            Config(unknown_section="oops")
+            Config(data_dir=tmp_path, unknown_section="oops")
 
 
 class TestConfigBuild:

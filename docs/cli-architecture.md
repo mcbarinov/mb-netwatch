@@ -1,4 +1,4 @@
-<!-- version: 2026-04-09 | source: https://github.com/mcbarinov/mm-clikit -->
+<!-- version: 2026-04-15 | source: https://github.com/mcbarinov/mm-clikit -->
 
 # CLI Application Architecture Guide
 
@@ -24,8 +24,12 @@ src/mb_<name>/
 │   ├── output.py          # Output(DualModeOutput)
 │   └── commands/          # One file per command
 │       ├── __init__.py
-│       ├── add.py
-│       └── list.py
+│       ├── add.py         # top-level: `my-app add`
+│       ├── list.py        # top-level: `my-app list`
+│       └── edit/          # group: `my-app edit <subcommand>`
+│           ├── __init__.py
+│           ├── delete.py
+│           └── rename.py
 │
 ├── tui/                   # TUI adapter (optional, uses Core)
 │   ├── __init__.py
@@ -41,6 +45,15 @@ CLI adapter code lives in the `cli/` subfolder.
 Config is at the package root — shared by both core and CLI.
 Other adapters (`daemon.py`, `tray.py`) sit at the package root alongside `cli/` — they use `Core` directly.
 Core has zero imports from `cli/` or other adapters — the dependency is strictly one-way.
+
+## Two output styles
+
+This guide describes two output styles. Pick one per app:
+
+- **Style A — Plain output (no `--json`).** Commands call `print_plain` / `print_table` / `print_toml` / `print_json` from mm-clikit directly. No `cli/output.py`, no `Output` class. `ctx.obj` holds just `CoreContext[Core]`. Use this for small CLIs where JSON output isn't a requirement. Disable the auto-registered flag with `TyperPlus(json_option=False)`.
+- **Style B — Dual-mode output (with `--json`).** Every user-visible output goes through an `Output(DualModeOutput)` class in `cli/output.py`. Each method provides both `json_data` and `display_data`. `ctx.obj` holds `CoreContext[Core, Output]`. Use this when JSON output matters (scripting, machine-readable pipelines).
+
+The `core/` layer is identical in both styles. Only `cli/` differs. If in doubt, start with Style A — upgrading to Style B later means adding one file (`output.py`) and rewriting commands to call `app.out.*` instead of `print_*`.
 
 ## Data Classes Convention
 
@@ -99,22 +112,18 @@ subclass `CliError`. But default to using `CliError` directly — don't create a
 ```python
 """Centralized application configuration."""
 
-import os
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from mm_clikit import BaseDataDirConfig
+from pydantic import computed_field
 
-DEFAULT_DATA_DIR = Path.home() / ".local" / "mb-<name>"
 
-
-class Config(BaseModel):
+class Config(BaseDataDirConfig):
     """Application-wide configuration."""
 
-    model_config = ConfigDict(frozen=True)  # Immutable after creation
-
-    data_dir: Path = Field(description="Base directory for all application data")
+    app_name: ClassVar[str] = "mb-<name>"
 
     @computed_field(description="SQLite database file")
     @property
@@ -134,26 +143,10 @@ class Config(BaseModel):
         """Optional TOML configuration file."""
         return self.data_dir / "config.toml"
 
-    def cli_base_args(self) -> list[str]:
-        """Build CLI base args, including --data-dir only when non-default.
-
-        Useful for spawning subprocesses (daemons, workers) that need
-        to inherit the data directory setting.
-        """
-        args: list[str] = ["mb-<name>"]
-        if self.data_dir != DEFAULT_DATA_DIR:
-            args.extend(["--data-dir", str(self.data_dir)])
-        return args
-
     @staticmethod
     def build(data_dir: Path | None = None) -> Config:
         """Build a Config from CLI arg / env var / default, with optional TOML overlay."""
-        if data_dir is not None:
-            resolved = data_dir.resolve()
-        elif env := os.environ.get("MB_<NAME>_DATA_DIR"):
-            resolved = Path(env).resolve()
-        else:
-            resolved = DEFAULT_DATA_DIR
+        resolved = Config.resolve_data_dir(data_dir)
 
         kwargs: dict[str, Any] = {"data_dir": resolved}
         config_path = resolved / "config.toml"
@@ -163,17 +156,23 @@ class Config(BaseModel):
             # Read app-specific settings from TOML here
             # e.g.: kwargs["timeout"] = toml_data.get("timeout", 30)
 
-        resolved.mkdir(parents=True, exist_ok=True)
         return Config(**kwargs)
 ```
 
-Data directory resolution order:
-1. `--data-dir` CLI flag (highest priority)
-2. `MB_<NAME>_DATA_DIR` environment variable
-3. `~/.local/mb-<name>/` default
+Setting `app_name` alone gives you:
+1. Default data directory at `~/.local/mb-<name>/`
+2. Env var override `MB_<NAME>_DATA_DIR` (hyphens become underscores, uppercased)
+3. `base_argv()` correctly omits `--data-dir` when the directory matches the default
 
-The `cli_base_args()` method is optional — only needed if the app spawns background processes
-(daemons, workers) that must inherit the data directory.
+Resolution order inside `resolve_data_dir`:
+1. `--data-dir` CLI flag
+2. Env var (derived from `app_name` or set explicitly via `data_dir_env_var`)
+3. Default directory (derived from `app_name` or set explicitly via `default_data_dir`)
+
+Override either `default_data_dir` or `data_dir_env_var` as a `ClassVar` when an
+app needs a non-standard layout (e.g. XDG directories, custom env var name). Apps
+without a data directory inherit `BaseConfig` directly and skip `data_dir`,
+`resolve_data_dir`, and `base_argv`.
 
 ---
 
@@ -337,6 +336,27 @@ Empty — the entry point in pyproject.toml points directly to `mb_<name>.cli.ma
 
 ### cli/context.py
 
+Pre-typed wrapper over `mm_clikit.use_context`. Commands import only this function — one import
+instead of two. Separate file to avoid circular imports (main.py imports commands, commands import use_context).
+
+**Style A (no Output):**
+
+```python
+"""Typed CLI context."""
+
+import typer
+from mm_clikit import CoreContext, use_context as _use_context
+
+from mb_<name>.core.core import Core
+
+
+def use_context(ctx: typer.Context) -> CoreContext[Core]:
+    """Extract typed core context from Typer context."""
+    return _use_context(ctx, CoreContext[Core])
+```
+
+**Style B (with Output):**
+
 ```python
 """Typed CLI context."""
 
@@ -352,10 +372,7 @@ def use_context(ctx: typer.Context) -> CoreContext[Core, Output]:
     return _use_context(ctx, CoreContext[Core, Output])
 ```
 
-Pre-typed wrapper over `mm_clikit.use_context`. Commands import only this function — one import
-instead of two. Separate file to avoid circular imports (main.py imports commands, commands import use_context).
-
-### cli/output.py
+### cli/output.py (Style B only)
 
 ```python
 """Structured output for CLI and JSON modes."""
@@ -393,6 +410,8 @@ Every user-visible output goes through a dedicated `Output` method. Each method 
 
 ### cli/main.py
 
+**Style A (no Output):**
+
 ```python
 """CLI app definition and initialization."""
 
@@ -404,11 +423,10 @@ from mm_clikit import CoreContext, TyperPlus, setup_logging
 
 from mb_<name>.cli.commands.add import add
 from mb_<name>.cli.commands.list import list_
-from mb_<name>.cli.output import Output
 from mb_<name>.config import Config
 from mb_<name>.core.core import Core
 
-app = TyperPlus(package_name="mb-<name>")
+app = TyperPlus(package_name="mb-<name>", json_option=False)
 
 
 @app.callback()
@@ -422,15 +440,17 @@ def main(
 ) -> None:
     """Short app description."""
     config = Config.build(data_dir)
-    setup_logging("mb_<name>", config.log_path)
+    setup_logging("mb_<name>", file_path=config.log_path)
     core = Core(config)
     ctx.call_on_close(core.close)
-    ctx.obj = CoreContext(core=core, out=Output())
+    ctx.obj = CoreContext[Core](core=core, out=None)
 
 
 app.command(aliases=["a"])(add)
 app.command(name="list", aliases=["l", "ls"])(list_)
 ```
+
+**Style B (with Output):** same as above, but `json_option=False` is dropped, `Output` is imported from `mb_<name>.cli.output`, and the last line becomes `ctx.obj = CoreContext[Core, Output](core=core, out=Output())`. Parametrize the constructor explicitly so `app.out` is typed as `Output` rather than falling back on the `OutT = None` default.
 
 The callback handles all initialization: config, logging, core, context.
 Resources that need cleanup use `ctx.call_on_close()`.
@@ -443,12 +463,15 @@ TyperPlus provides automatically:
 
 ### cli/commands/add.py
 
+**Style A (no Output):**
+
 ```python
 """Add a new item."""
 
 from typing import Annotated
 
 import typer
+from mm_clikit import print_plain
 
 from mb_<name>.cli.context import use_context
 
@@ -460,17 +483,22 @@ def add(
     """Create a new item."""
     app = use_context(ctx)
     item_id = app.core.service.add_item(name)
-    app.out.print_item_added(item_id, name)
+    print_plain(f"Item #{item_id} created: {name}")
 ```
+
+**Style B (with Output):** the last two lines become `item_id = app.core.service.add_item(name)` followed by `app.out.print_item_added(item_id, name)`.
 
 Uses `core.service` because `add_item` has validation logic (non-empty name check).
 
 ### cli/commands/list.py
 
+**Style A (no Output):**
+
 ```python
 """List all items."""
 
 import typer
+from mm_clikit import print_plain, print_table
 
 from mb_<name>.cli.context import use_context
 
@@ -479,10 +507,51 @@ def list_(ctx: typer.Context) -> None:
     """Show all items."""
     app = use_context(ctx)
     items = app.core.db.fetch_all_items()
-    app.out.print_items(items)
+    if not items:
+        print_plain("No items.")
+        return
+    print_table(
+        columns=["ID", "Name"],
+        rows=[[str(item.id), item.name] for item in items],
+    )
 ```
 
+**Style B (with Output):** replace the `if`/`print_table` block with `app.out.print_items(items)`.
+
 Uses `core.db` directly — fetching all items is a simple read with no business logic.
+
+### Command groups (subfolders)
+
+When a Typer sub-app is registered via `add_typer`, put its subcommand files in `cli/commands/<group>/`, one file per subcommand. The subfolder name matches the group name on the CLI (use underscores in the folder if the CLI name has hyphens, same rule as command filenames).
+
+```
+cli/commands/
+├── add.py             # `my-app add`
+├── list.py            # `my-app list`
+└── edit/              # `my-app edit ...`
+    ├── __init__.py
+    ├── delete.py      # `my-app edit delete`
+    └── rename.py      # `my-app edit rename`
+```
+
+Rules:
+
+- **Top-level commands stay flat.** Commands registered directly on `app` live as flat files in `cli/commands/`.
+- **Groups get their own subfolder.** Any `add_typer` group with multiple subcommands gets a folder. A group with a single subcommand may stay flat if it's unlikely to grow — judgment call.
+- **`__init__.py`:** empty module docstring only, per rule #13. No re-exports, no logic.
+- **Command files are identical** to flat commands — same `use_context(ctx)` pattern, same Style A / Style B choice. Only the import path changes.
+
+Wire the group in `main.py` by building a sub-app and calling `add_typer`:
+
+```python
+from mb_<name>.cli.commands.edit.delete import delete
+from mb_<name>.cli.commands.edit.rename import rename
+
+edit_app = TyperPlus()
+edit_app.command(name="delete")(delete)
+edit_app.command(name="rename")(rename)
+app.add_typer(edit_app, name="edit", help="Edit existing items.")
+```
 
 ---
 
@@ -553,16 +622,16 @@ The CLI is just one adapter over the core. Future adapters (web API, telegram bo
 
 ## Rules Summary
 
-1. **Structure:** Core logic in `core/` package. CLI adapter in `cli/` subfolder. Config at package root.
+1. **Structure:** Core logic in `core/` package. CLI adapter in `cli/` subfolder. Config at package root. Subcommand groups live in `cli/commands/<group>/`, one file per subcommand; top-level commands stay flat in `cli/commands/`.
 2. **Dependencies:** `cli/` → `core/` → `config.py` (one-way for logic). Core never imports from `cli/`. Config may import shared type aliases (e.g. `Literal` types) from `core/` — these are domain vocabulary, not logic coupling.
 3. **Data access:** Commands use `core.service` for business logic (validation, orchestration). Commands use `core.db` directly for simple reads. Don't create service methods that just forward to db.
 4. **Core class:** Composition root — creates and owns Db, Service, Config. Single `Core(config)` constructor, `close()` for cleanup.
 5. **Errors:** `CliError(message, code)` from mm-clikit. Raise from service. TyperPlus catches automatically.
-6. **Output:** All user output via `Output(DualModeOutput)` in `cli/output.py`. One method per operation, both `json_data` and `display_data`.
-7. **Config:** Frozen Pydantic. Resolution: `--data-dir` → env var → default. Optional TOML overlay.
-8. **Context:** Pre-typed `use_context()` in `cli/context.py`. Returns `CoreContext[Core, Output]`. Commands call `use_context(ctx)` — one import, fully typed.
-9. **JSON mode:** Via TyperPlus `--json` flag. `DualModeOutput` reads it automatically. Never add a manual `--json` parameter.
-10. **Logging:** `setup_logging(logger_name, log_path)` from mm-clikit, called in the callback.
+6. **Output:** Style B — all user output via `Output(DualModeOutput)` in `cli/output.py`, one method per operation with both `json_data` and `display_data`. Style A — commands call `print_plain` / `print_table` / `print_toml` / `print_json` from mm-clikit directly, no `Output` class.
+7. **Config:** Subclass `BaseDataDirConfig` from mm-clikit (or `BaseConfig` for apps without a data directory). Resolution: `--data-dir` → env var → default, via `BaseDataDirConfig.resolve_data_dir`. Optional TOML overlay in `build()`.
+8. **Context:** Pre-typed `use_context()` in `cli/context.py`. Style A returns `CoreContext[Core]`; Style B returns `CoreContext[Core, Output]`. Commands call `use_context(ctx)` — one import, fully typed.
+9. **JSON mode:** Requires Style B (`DualModeOutput`). Enabled via TyperPlus `--json` flag, which `DualModeOutput` reads automatically — never add a manual `--json` parameter. Style A apps must disable the flag with `TyperPlus(json_option=False)`.
+10. **Logging:** `setup_logging(logger_name, file_path=...)` from mm-clikit, called in the callback. `file_path` is optional (console-only by default); pass it to enable the rotating log file. When `file_path` is set, `setup_logging` also installs a `sys.excepthook` that logs uncaught exceptions as `CRITICAL` — so crashes in workers, trays, and daemons land in the log file instead of disappearing with redirected stderr.
 11. **Entry point:** `mb_<name>.cli.main:app` in pyproject.toml.
 12. **Row models:** Subclass `SqliteRow` for typed database rows with `from_row()` conversion.
 13. **`__init__.py`:** Keep empty in application packages — just a module docstring. No re-exports.

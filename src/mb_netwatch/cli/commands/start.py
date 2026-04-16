@@ -1,10 +1,9 @@
 """Start probed/tray processes in the background."""
 
-import shutil
 from typing import Annotated, Literal
 
 import typer
-from mm_clikit import CliError, is_process_running, spawn_daemon
+from mm_clikit import is_process_running, spawn_daemon
 
 from mb_netwatch.cli.context import use_context
 from mb_netwatch.cli.output import StartStopResult
@@ -19,9 +18,5 @@ def start(ctx: typer.Context, component: Annotated[Literal["probed", "tray"] | N
             app.out.print_start_stop(StartStopResult(component=name, message=f"{name}: already running"))
             continue
 
-        exe = shutil.which("mb-netwatch")
-        if not exe:
-            raise CliError("'mb-netwatch' not found in PATH. Install with: uv tool install .", "EXE_NOT_FOUND")
-
-        pid = spawn_daemon([*app.core.config.cli_base_args(), name])
+        pid = spawn_daemon([*app.core.config.base_argv(), name])
         app.out.print_start_stop(StartStopResult(component=name, message=f"{name}: started (pid {pid})"))

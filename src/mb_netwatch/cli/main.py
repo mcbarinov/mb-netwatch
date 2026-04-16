@@ -30,7 +30,7 @@ def main(
     config = Config.build(data_dir, debug=debug)
     core = Core(config)
     ctx.call_on_close(core.close)
-    ctx.obj = CoreContext(core=core, out=Output())
+    ctx.obj = CoreContext[Core, Output](core=core, out=Output())
 
     if ctx.invoked_subcommand is None:
         TuiApp(core).run()

@@ -4,6 +4,7 @@ import asyncio
 import ipaddress
 import logging
 import random
+from collections.abc import Callable
 
 import aiohttp
 from pydantic import BaseModel, ConfigDict
@@ -64,21 +65,35 @@ async def _race_urls(session: aiohttp.ClientSession, urls: list[str]) -> str | N
             task.cancel()
 
 
-async def check_ip(*, previous: IpResult | None = None, http_timeout: float = 5.0) -> IpResult:
+async def check_ip(
+    *,
+    previous: IpResult | None = None,
+    known_country_lookup: Callable[[str], str | None] | None = None,
+    http_timeout: float = 5.0,
+) -> IpResult:
     """Detect public IP and resolve its country code.
 
     Races 2 random IP services, then races country services for the winner.
     When *previous* is provided and the detected IP matches ``previous.ip``,
     the country code is reused without making extra API calls.
 
+    When *known_country_lookup* is provided, it is consulted for any detected
+    IP that is not the in-process ``previous.ip`` — this lets a persistent
+    store (e.g. the ``probe_ip`` history table) short-circuit the country
+    race for IPs that have been resolved before.
+
     Each call creates a throwaway session — connection reuse is pointless
     at 60-second intervals (exceeds default keepalive).
     """
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=http_timeout)) as session:
-        return await _check_ip(session, previous)
+        return await _check_ip(session, previous, known_country_lookup)
 
 
-async def _check_ip(session: aiohttp.ClientSession, previous: IpResult | None) -> IpResult:
+async def _check_ip(
+    session: aiohttp.ClientSession,
+    previous: IpResult | None,
+    known_country_lookup: Callable[[str], str | None] | None,
+) -> IpResult:
     """Detect IP, then resolve country."""
     # Step 1: detect IP by racing 2 random services
     selected = random.sample(_IP_SERVICES, 2)
@@ -99,6 +114,12 @@ async def _check_ip(session: aiohttp.ClientSession, previous: IpResult | None) -
     # Reuse country code when IP hasn't changed
     if previous and ip == previous.ip and previous.country_code:
         return IpResult(ip=ip, country_code=previous.country_code)
+
+    # Persistent cache: reuse country if this IP has been resolved before
+    if known_country_lookup is not None:
+        cached = known_country_lookup(ip)
+        if cached:
+            return IpResult(ip=ip, country_code=cached)
 
     # Step 2: resolve country by racing geo services
     country_urls = [url.format(ip=ip) for url in _IP_COUNTRY_SERVICES]

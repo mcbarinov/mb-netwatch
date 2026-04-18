@@ -152,7 +152,11 @@ class Service:
         if vpn_changed:
             self._last_ip_result = None
 
-        result = await check_ip(previous=self._last_ip_result, http_timeout=self._config.probed.ip_timeout)
+        result = await check_ip(
+            previous=self._last_ip_result,
+            known_country_lookup=self._db.fetch_country_for_ip,
+            http_timeout=self._config.probed.ip_timeout,
+        )
         ts = datetime.now(tz=UTC)
         self._db.upsert_probe_ip(ts, result.ip, result.country_code)
         self._last_ip_result = result

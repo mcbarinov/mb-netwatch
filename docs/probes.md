@@ -94,7 +94,7 @@ Detects the public IP address and its country every 60 seconds. Useful for verif
 **How it works:**
 1. Two random services are picked from the IP list and raced — first valid IPv4 response wins
 2. If the IP is the same as the previous check, the country code is reused (saves API quota)
-3. If the IP changed, two country services are raced for the new IP
+3. If the IP changed, the daemon first checks whether this IP has been resolved before in the local `probe_ip` history — if so, the prior country code is reused. Only a genuinely new IP triggers the country-service race.
 4. Responses are validated: IP must be a valid IPv4 address, country must be exactly 2 uppercase ASCII letters
 
 ## DNS

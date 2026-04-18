@@ -275,6 +275,14 @@ class Db(SqliteDb):
         ).fetchone()
         return ProbeIp.from_row(row) if row else None
 
+    def fetch_country_for_ip(self, ip: str) -> str | None:
+        """Return the most recent known country_code for *ip*, or None if unseen."""
+        row = self.conn.execute(
+            "SELECT country_code FROM probe_ip WHERE ip = ? AND country_code IS NOT NULL ORDER BY updated_at DESC LIMIT 1",
+            (ip,),
+        ).fetchone()
+        return row["country_code"] if row else None
+
     def fetch_recent_probe_ip(self, limit: int) -> list[ProbeIp]:
         """Return the last *limit* IP state changes, ordered newest-first."""
         rows = self.conn.execute(

@@ -42,16 +42,23 @@ async def _measure(session: aiohttp.ClientSession, url: str) -> tuple[float, str
         return elapsed, url
 
 
-async def check_latency(session: aiohttp.ClientSession | None = None, *, http_timeout: float = 5.0) -> LatencyResult:
-    """Measure latency against all endpoints concurrently, return the first success.
+async def check_latency_warm(session: aiohttp.ClientSession) -> LatencyResult:
+    """Measure latency over a reused keep-alive session (steady-state probe).
 
-    When *session* is provided it is used as-is (probed keeps one alive for
-    connection reuse).  When omitted a throwaway session is created with *http_timeout*.
+    Measures steady-state HTTP responsiveness over an already-established connection.
+    Hides TCP/TLS setup costs — use ``check_latency_cold`` for the setup-path probe.
     """
-    if session is None:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=http_timeout)) as s:
-            return await _check_latency(s)
     return await _check_latency(session)
+
+
+async def check_latency_cold(*, http_timeout: float = 5.0) -> LatencyResult:
+    """Measure latency over a fresh session — full DNS + TCP + TLS + HTTP per call (setup-path probe).
+
+    Complements ``check_latency_warm``: this is the "can I start a new connection right now?"
+    signal that catches failures a warm keep-alive probe hides.
+    """
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=http_timeout)) as s:
+        return await _check_latency(s)
 
 
 async def _check_latency(session: aiohttp.ClientSession) -> LatencyResult:

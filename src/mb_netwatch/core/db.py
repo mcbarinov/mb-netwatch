@@ -1,4 +1,4 @@
-"""SQLite storage for probe results: latency, VPN, and IP."""
+"""SQLite storage for probe results: warm/cold latency, VPN, and IP."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -10,8 +10,21 @@ from mm_clikit import SqliteDb, SqliteRow
 TunnelMode = Literal["full", "split"]
 
 
-class ProbeLatency(SqliteRow):
-    """Single latency probe row."""
+class ProbeLatencyWarm(SqliteRow):
+    """Single warm-latency probe row (reused keep-alive HTTP session)."""
+
+    created_at: float  # UTC Unix timestamp (seconds since epoch)
+    latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
+    endpoint: str | None  # URL that responded first; None when down
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row."""
+        return cls(created_at=row["created_at"], latency_ms=row["latency_ms"], endpoint=row["endpoint"])
+
+
+class ProbeLatencyCold(SqliteRow):
+    """Single cold-latency probe row (fresh HTTP session — full TCP+TLS setup each cycle)."""
 
     created_at: float  # UTC Unix timestamp (seconds since epoch)
     latency_ms: float | None  # Round-trip time in milliseconds; None when all endpoints failed
@@ -59,10 +72,15 @@ class ProbeIp(SqliteRow):
 
 
 _MIGRATE_V1 = """
-CREATE TABLE probe_latency (
+CREATE TABLE probe_latency_warm (
     created_at REAL NOT NULL, latency_ms REAL, endpoint TEXT
 );
-CREATE INDEX idx_probe_latency_created_at ON probe_latency(created_at);
+CREATE INDEX idx_probe_latency_warm_created_at ON probe_latency_warm(created_at);
+
+CREATE TABLE probe_latency_cold (
+    created_at REAL NOT NULL, latency_ms REAL, endpoint TEXT
+);
+CREATE INDEX idx_probe_latency_cold_created_at ON probe_latency_cold(created_at);
 
 CREATE TABLE probe_vpn (
     created_at REAL NOT NULL, updated_at REAL NOT NULL,
@@ -92,35 +110,67 @@ class Db(SqliteDb):
         """
         super().__init__(db_path, migrations=(_MIGRATE_V1,))
 
-    # -- Latency probes --------------------------------------------------------
+    # -- Warm latency probes ---------------------------------------------------
 
-    def insert_probe_latency(self, ts: datetime, latency_ms: float | None, endpoint: str | None) -> None:
-        """Insert a single latency probe result."""
+    def insert_probe_latency_warm(self, ts: datetime, latency_ms: float | None, endpoint: str | None) -> None:
+        """Insert a single warm-latency probe result."""
         self.conn.execute(
-            "INSERT INTO probe_latency (created_at, latency_ms, endpoint) VALUES (?, ?, ?)",
+            "INSERT INTO probe_latency_warm (created_at, latency_ms, endpoint) VALUES (?, ?, ?)",
             (ts.timestamp(), latency_ms, endpoint),
         )
         self.conn.commit()
 
-    def fetch_latest_probe_latency(self) -> ProbeLatency | None:
-        """Return the most recent latency probe, or None if table is empty."""
+    def fetch_latest_probe_latency_warm(self) -> ProbeLatencyWarm | None:
+        """Return the most recent warm-latency probe, or None if table is empty."""
         row = self.conn.execute(
-            "SELECT created_at, latency_ms, endpoint FROM probe_latency ORDER BY created_at DESC LIMIT 1",
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency_warm ORDER BY created_at DESC LIMIT 1",
         ).fetchone()
-        return ProbeLatency.from_row(row) if row else None
+        return ProbeLatencyWarm.from_row(row) if row else None
 
-    def fetch_recent_probe_latency(self, limit: int) -> list[ProbeLatency]:
-        """Return the last *limit* latency probes, ordered oldest-first (for sparkline)."""
+    def fetch_recent_probe_latency_warm(self, limit: int) -> list[ProbeLatencyWarm]:
+        """Return the last *limit* warm-latency probes, ordered oldest-first (for sparkline)."""
         rows = self.conn.execute(
-            "SELECT created_at, latency_ms, endpoint FROM probe_latency ORDER BY created_at DESC LIMIT ?",
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency_warm ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        return [ProbeLatency.from_row(r) for r in reversed(rows)]
+        return [ProbeLatencyWarm.from_row(r) for r in reversed(rows)]
 
-    def purge_old_probe_latency(self, retention_days: int) -> int:
-        """Delete latency probes older than *retention_days*. Return rows deleted."""
+    def purge_old_probe_latency_warm(self, retention_days: int) -> int:
+        """Delete warm-latency probes older than *retention_days*. Return rows deleted."""
         cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
-        cursor = self.conn.execute("DELETE FROM probe_latency WHERE created_at < ?", (cutoff.timestamp(),))
+        cursor = self.conn.execute("DELETE FROM probe_latency_warm WHERE created_at < ?", (cutoff.timestamp(),))
+        self.conn.commit()
+        return cursor.rowcount
+
+    # -- Cold latency probes ---------------------------------------------------
+
+    def insert_probe_latency_cold(self, ts: datetime, latency_ms: float | None, endpoint: str | None) -> None:
+        """Insert a single cold-latency probe result."""
+        self.conn.execute(
+            "INSERT INTO probe_latency_cold (created_at, latency_ms, endpoint) VALUES (?, ?, ?)",
+            (ts.timestamp(), latency_ms, endpoint),
+        )
+        self.conn.commit()
+
+    def fetch_latest_probe_latency_cold(self) -> ProbeLatencyCold | None:
+        """Return the most recent cold-latency probe, or None if table is empty."""
+        row = self.conn.execute(
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency_cold ORDER BY created_at DESC LIMIT 1",
+        ).fetchone()
+        return ProbeLatencyCold.from_row(row) if row else None
+
+    def fetch_recent_probe_latency_cold(self, limit: int) -> list[ProbeLatencyCold]:
+        """Return the last *limit* cold-latency probes, ordered oldest-first (for sparkline)."""
+        rows = self.conn.execute(
+            "SELECT created_at, latency_ms, endpoint FROM probe_latency_cold ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [ProbeLatencyCold.from_row(r) for r in reversed(rows)]
+
+    def purge_old_probe_latency_cold(self, retention_days: int) -> int:
+        """Delete cold-latency probes older than *retention_days*. Return rows deleted."""
+        cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
+        cursor = self.conn.execute("DELETE FROM probe_latency_cold WHERE created_at < ?", (cutoff.timestamp(),))
         self.conn.commit()
         return cursor.rowcount
 

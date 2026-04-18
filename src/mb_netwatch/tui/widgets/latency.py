@@ -1,9 +1,14 @@
-"""Latency sparkline widget."""
+"""Latency sparkline widget (shared by warm and cold probes)."""
+
+from collections.abc import Sequence
+from typing import Literal
 
 from rich.text import Text
 from textual.widget import Widget
 
-from mb_netwatch.core.db import ProbeLatency
+from mb_netwatch.core.db import ProbeLatencyCold, ProbeLatencyWarm
+
+_LatencyRow = ProbeLatencyWarm | ProbeLatencyCold
 
 _SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
@@ -19,7 +24,7 @@ def latency_style(ms: float | None, ok_ms: int, slow_ms: int) -> str:
     return "red"
 
 
-def build_sparkline(history: list[ProbeLatency], ok_ms: int, slow_ms: int) -> Text:
+def build_sparkline(history: Sequence[_LatencyRow], ok_ms: int, slow_ms: int) -> Text:
     """Build a colored sparkline Text from latency history."""
     values = [r.latency_ms for r in history]
     if not values:
@@ -38,7 +43,7 @@ def build_sparkline(history: list[ProbeLatency], ok_ms: int, slow_ms: int) -> Te
     return text
 
 
-def _build_stats_line(history: list[ProbeLatency]) -> Text:
+def _build_stats_line(history: Sequence[_LatencyRow]) -> Text:
     """Build stats summary line: min / avg / p95 / max / down count."""
     values = [r.latency_ms for r in history]
     nums = sorted(v for v in values if v is not None)
@@ -57,7 +62,7 @@ def _build_stats_line(history: list[ProbeLatency]) -> Text:
 
 
 class LatencyWidget(Widget):
-    """Latency sparkline with stats line."""
+    """Latency sparkline with stats line. Parametrized by probe kind (warm or cold)."""
 
     DEFAULT_CSS = """
     LatencyWidget {
@@ -69,20 +74,27 @@ class LatencyWidget(Widget):
     }
     """
 
-    def __init__(self) -> None:
-        """Initialize with empty state."""
-        super().__init__()
-        self.border_title = "Latency"
-        self._history: list[ProbeLatency] = []  # Latest latency readings
-        self._ok_ms: int = 300  # OK threshold (milliseconds)
-        self._slow_ms: int = 800  # Slow threshold (milliseconds)
+    def __init__(self, kind: Literal["warm", "cold"]) -> None:
+        """Initialize for the given probe kind.
+
+        Args:
+            kind: Probe kind. Drives the widget's DOM id (``latency-warm`` / ``latency-cold``)
+                and the border title shown to the user.
+
+        """
+        super().__init__(id=f"latency-{kind}")
+        self._kind = kind  # Probe kind ("warm" or "cold") — determines title and callers' data source
+        self.border_title = f"Latency ({kind})"
+        self._history: Sequence[_LatencyRow] = []  # Latest latency readings for this kind
+        self._ok_ms: int = 300  # OK threshold (milliseconds); overwritten on first update_data
+        self._slow_ms: int = 800  # Slow threshold (milliseconds); overwritten on first update_data
 
     @property
     def content_width(self) -> int:
         """Usable width for sparkline characters."""
         return self.scrollable_content_region.width
 
-    def update_data(self, history: list[ProbeLatency], ok_ms: int, slow_ms: int) -> None:
+    def update_data(self, history: Sequence[_LatencyRow], ok_ms: int, slow_ms: int) -> None:
         """Set new latency data and trigger re-render."""
         self._history = history
         self._ok_ms = ok_ms

@@ -10,103 +10,91 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 
 class ProbedConfig(BaseModel):
-    """Settings for the background measurement daemon.
-
-    Args:
-        latency_interval: seconds between latency probes.
-        vpn_interval: seconds between VPN status checks.
-        ip_interval: seconds between public IP lookups.
-        purge_interval: seconds between old-data purge runs.
-        latency_timeout: HTTP timeout for latency probes (seconds).
-        ip_timeout: HTTP timeout for IP/country lookups (seconds).
-        retention_days: days to keep raw measurement rows before purging.
-
-    """
+    """Settings for the background measurement daemon."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    latency_interval: float = Field(default=2.0, gt=0)
-    vpn_interval: float = Field(default=10.0, gt=0)
-    ip_interval: float = Field(default=60.0, gt=0)
-    purge_interval: float = Field(default=3600.0, gt=0)
-    latency_timeout: float = Field(default=5.0, gt=0)
-    ip_timeout: float = Field(default=5.0, gt=0)
-    retention_days: int = Field(default=30, gt=0)
+    warm_latency_interval: float = Field(default=2.0, gt=0)  # seconds between warm-latency probes (reused keep-alive session)
+    cold_latency_interval: float = Field(default=10.0, gt=0)  # seconds between cold-latency probes (fresh session per call)
+    vpn_interval: float = Field(default=10.0, gt=0)  # seconds between VPN status checks
+    ip_interval: float = Field(default=60.0, gt=0)  # seconds between public IP lookups
+    purge_interval: float = Field(default=3600.0, gt=0)  # seconds between old-data purge runs
+    warm_latency_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for warm-latency probes (seconds)
+    cold_latency_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for cold-latency probes (seconds)
+    ip_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for IP/country lookups (seconds)
+    retention_days: int = Field(default=30, gt=0)  # days to keep raw measurement rows before purging
 
 
-class LatencyThresholdConfig(BaseModel):
-    """Latency classification thresholds shared by all display consumers (tray, TUI).
-
-    Args:
-        ok_ms: latency below this is OK (milliseconds).
-        slow_ms: latency below this is SLOW, at or above is BAD (milliseconds).
-        stale_seconds: seconds since last latency row before data is considered stale.
-
-    """
+class WarmLatencyThresholdConfig(BaseModel):
+    """Warm-latency classification thresholds shared by all display consumers (tray, TUI)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    ok_ms: int = Field(default=300, gt=0)
-    slow_ms: int = Field(default=800, gt=0)
-    stale_seconds: float = Field(default=10.0, gt=0)
+    ok_ms: int = Field(default=300, gt=0)  # warm latency below this is OK (milliseconds)
+    slow_ms: int = Field(default=800, gt=0)  # warm latency below this is SLOW, at or above is BAD (milliseconds)
+    stale_seconds: float = Field(default=10.0, gt=0)  # seconds since last warm-latency row before data is considered stale
 
     @model_validator(mode="after")
     def _check_threshold_ordering(self) -> Self:
         if self.ok_ms >= self.slow_ms:
             raise ValueError(
-                f"latency_threshold.ok_ms ({self.ok_ms}) must be less than latency_threshold.slow_ms ({self.slow_ms})"
+                f"warm_latency_threshold.ok_ms ({self.ok_ms}) must be less than warm_latency_threshold.slow_ms ({self.slow_ms})"
+            )
+        return self
+
+
+class ColdLatencyThresholdConfig(BaseModel):
+    """Cold-latency classification thresholds. Baseline is ~100-300ms higher than warm due to TCP+TLS handshake."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ok_ms: int = Field(default=600, gt=0)  # cold latency below this is OK (milliseconds)
+    slow_ms: int = Field(default=1500, gt=0)  # cold latency below this is SLOW, at or above is BAD (milliseconds)
+    stale_seconds: float = Field(default=30.0, gt=0)  # seconds since last cold-latency row before data is considered stale
+
+    @model_validator(mode="after")
+    def _check_threshold_ordering(self) -> Self:
+        if self.ok_ms >= self.slow_ms:
+            raise ValueError(
+                f"cold_latency_threshold.ok_ms ({self.ok_ms}) must be less than cold_latency_threshold.slow_ms ({self.slow_ms})"
             )
         return self
 
 
 class TrayConfig(BaseModel):
-    """Settings for the menu bar UI process.
-
-    Args:
-        poll_interval: seconds between tray DB polls for fresh data.
-
-    """
+    """Settings for the menu bar UI process."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    poll_interval: float = Field(default=2.0, gt=0)
+    poll_interval: float = Field(default=2.0, gt=0)  # seconds between tray DB polls for fresh data
 
 
 class TuiConfig(BaseModel):
-    """Settings for the TUI dashboard.
-
-    Args:
-        poll_interval: seconds between TUI DB polls.
-        latency_history_max: max number of latency readings in sparkline.
-
-    """
+    """Settings for the TUI dashboard."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    poll_interval: float = Field(default=0.5, gt=0)
-    latency_history_max: int = Field(default=300, gt=0)
+    poll_interval: float = Field(default=0.5, gt=0)  # seconds between TUI DB polls
+    # Max number of latency readings drawn in a sparkline. Applies to both warm and cold sparklines
+    # (each gets its own buffer).
+    sparkline_history_max: int = Field(default=300, gt=0)
 
 
 class Config(BaseDataDirConfig):
-    """Top-level application configuration.
-
-    Args:
-        probed: background measurement daemon settings.
-        latency_threshold: latency classification thresholds for display.
-        tray: menu bar UI settings.
-        tui: TUI dashboard settings.
-
-    """
+    """Top-level application configuration."""
 
     app_name: ClassVar[str] = "mb-netwatch"
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     debug: bool = Field(default=False, description="Enable DEBUG level in the log file")
-    probed: ProbedConfig = Field(default_factory=ProbedConfig)
-    latency_threshold: LatencyThresholdConfig = Field(default_factory=LatencyThresholdConfig)
-    tray: TrayConfig = Field(default_factory=TrayConfig)
-    tui: TuiConfig = Field(default_factory=TuiConfig)
+    probed: ProbedConfig = Field(default_factory=ProbedConfig)  # background measurement daemon settings
+    # Warm-latency classification thresholds for display.
+    warm_latency_threshold: WarmLatencyThresholdConfig = Field(default_factory=WarmLatencyThresholdConfig)
+    # Cold-latency classification thresholds for display.
+    cold_latency_threshold: ColdLatencyThresholdConfig = Field(default_factory=ColdLatencyThresholdConfig)
+    tray: TrayConfig = Field(default_factory=TrayConfig)  # menu bar UI settings
+    tui: TuiConfig = Field(default_factory=TuiConfig)  # TUI dashboard settings
 
     @computed_field
     @cached_property
@@ -160,13 +148,14 @@ class Config(BaseDataDirConfig):
             with config_path.open("rb") as f:
                 data = tomllib.load(f)
 
-            known_sections = frozenset({"probed", "latency_threshold", "tray", "tui"})
+            known_sections = frozenset({"probed", "warm_latency_threshold", "cold_latency_threshold", "tray", "tui"})
             unknown = set(data.keys()) - known_sections
             if unknown:
                 raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
 
             kwargs["probed"] = ProbedConfig(**data.get("probed", {}))
-            kwargs["latency_threshold"] = LatencyThresholdConfig(**data.get("latency_threshold", {}))
+            kwargs["warm_latency_threshold"] = WarmLatencyThresholdConfig(**data.get("warm_latency_threshold", {}))
+            kwargs["cold_latency_threshold"] = ColdLatencyThresholdConfig(**data.get("cold_latency_threshold", {}))
             kwargs["tray"] = TrayConfig(**data.get("tray", {}))
             kwargs["tui"] = TuiConfig(**data.get("tui", {}))
 

@@ -16,22 +16,29 @@ from mb_netwatch.tui.widgets.latency import latency_style
 
 log = logging.getLogger(__name__)
 
+_LABEL_WIDTH = 14  # Shared left-aligned width for every probe-result line label
 
-def _format_latency_line(result: ProbeResult, ok_ms: int, slow_ms: int) -> Text:
-    """Format the latency line from a live ProbeResult."""
-    text = Text("Latency:  ", style="bold")
-    if result.latency_ms is None:
+
+def _label(text: str) -> str:
+    """Left-justify a label to the shared column width used across all probe lines."""
+    return f"{text:<{_LABEL_WIDTH}}"
+
+
+def _format_latency_line(label: str, ms: float | None, endpoint: str | None, ok_ms: int, slow_ms: int) -> Text:
+    """Format a single latency line (warm or cold) from a live ProbeResult."""
+    text = Text(_label(label), style="bold")
+    if ms is None:
         text.append("down", style="bold red")
         return text
-    host = urlparse(result.endpoint).hostname if result.endpoint else "?"
-    text.append(f"{result.latency_ms:.0f} ms", style=latency_style(result.latency_ms, ok_ms, slow_ms))
+    host = urlparse(endpoint).hostname if endpoint else "?"
+    text.append(f"{ms:.0f} ms", style=latency_style(ms, ok_ms, slow_ms))
     text.append(f"  ({host})", style="dim")
     return text
 
 
 def _format_vpn_line(result: ProbeResult) -> Text:
     """Format the VPN line from a live ProbeResult."""
-    text = Text("VPN:      ", style="bold")
+    text = Text(_label("VPN:"), style="bold")
     if not result.vpn_active:
         text.append("off", style="dim")
         return text
@@ -44,7 +51,7 @@ def _format_vpn_line(result: ProbeResult) -> Text:
 
 def _format_ip_line(result: ProbeResult) -> Text:
     """Format the IP line from a live ProbeResult."""
-    text = Text("IP:       ", style="bold")
+    text = Text(_label("IP:"), style="bold")
     if result.ip is None:
         text.append("unknown", style="dim")
         return text
@@ -60,7 +67,7 @@ def _format_dns_line(result: ProbeResult) -> Text:
     Shows the primary resolver only; a `+N` hint signals additional resolvers
     when the system has multiple (rare outside corporate / dual-homed setups).
     """
-    text = Text("DNS:      ", style="bold")
+    text = Text(_label("DNS:"), style="bold")
     if not result.dns_resolvers:
         text.append("unknown", style="dim")
         return text
@@ -128,18 +135,36 @@ class ProbeResultScreen(Screen[None]):
     def _render_loading(self) -> None:
         """Show the 'running…' placeholder for all probe lines."""
         text = Text()
-        text.append("Latency:  running…\n", style="dim")
-        text.append("VPN:      running…\n", style="dim")
-        text.append("IP:       running…\n", style="dim")
-        text.append("DNS:      running…", style="dim")
+        for label in ("Latency warm:", "Latency cold:", "VPN:", "IP:", "DNS:"):
+            text.append(f"{_label(label)}running…\n", style="dim")
         self.query_one("#probe-body", Static).update(text)
 
     def _render_result(self, result: ProbeResult) -> None:
         """Render the finished ProbeResult."""
-        ok_ms = self._core.config.latency_threshold.ok_ms
-        slow_ms = self._core.config.latency_threshold.slow_ms
+        warm_ok = self._core.config.warm_latency_threshold.ok_ms
+        warm_slow = self._core.config.warm_latency_threshold.slow_ms
+        cold_ok = self._core.config.cold_latency_threshold.ok_ms
+        cold_slow = self._core.config.cold_latency_threshold.slow_ms
         text = Text()
-        text.append_text(_format_latency_line(result, ok_ms, slow_ms))
+        text.append_text(
+            _format_latency_line(
+                "Latency warm:",
+                result.latency_warm_ms,
+                result.latency_warm_endpoint,
+                warm_ok,
+                warm_slow,
+            )
+        )
+        text.append("\n")
+        text.append_text(
+            _format_latency_line(
+                "Latency cold:",
+                result.latency_cold_ms,
+                result.latency_cold_endpoint,
+                cold_ok,
+                cold_slow,
+            )
+        )
         text.append("\n")
         text.append_text(_format_vpn_line(result))
         text.append("\n")

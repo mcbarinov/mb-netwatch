@@ -14,20 +14,29 @@ class TestDefaults:
     def test_default_intervals(self, tmp_path):
         """Default probed intervals match documented values."""
         cfg = Config(data_dir=tmp_path)
-        assert cfg.probed.latency_interval == 2.0
+        assert cfg.probed.warm_latency_interval == 2.0
+        assert cfg.probed.cold_latency_interval == 10.0
         assert cfg.probed.vpn_interval == 10.0
         assert cfg.probed.ip_interval == 60.0
         assert cfg.probed.purge_interval == 3600.0
-        assert cfg.probed.latency_timeout == 5.0
+        assert cfg.probed.warm_latency_timeout == 5.0
+        assert cfg.probed.cold_latency_timeout == 5.0
         assert cfg.probed.ip_timeout == 5.0
         assert cfg.probed.retention_days == 30
 
-    def test_default_latency_threshold(self, tmp_path):
-        """Default latency threshold settings."""
+    def test_default_warm_latency_threshold(self, tmp_path):
+        """Default warm-latency threshold settings."""
         cfg = Config(data_dir=tmp_path)
-        assert cfg.latency_threshold.ok_ms == 300
-        assert cfg.latency_threshold.slow_ms == 800
-        assert cfg.latency_threshold.stale_seconds == 10.0
+        assert cfg.warm_latency_threshold.ok_ms == 300
+        assert cfg.warm_latency_threshold.slow_ms == 800
+        assert cfg.warm_latency_threshold.stale_seconds == 10.0
+
+    def test_default_cold_latency_threshold(self, tmp_path):
+        """Default cold-latency threshold settings."""
+        cfg = Config(data_dir=tmp_path)
+        assert cfg.cold_latency_threshold.ok_ms == 600
+        assert cfg.cold_latency_threshold.slow_ms == 1500
+        assert cfg.cold_latency_threshold.stale_seconds == 30.0
 
     def test_default_tray(self, tmp_path):
         """Default tray settings."""
@@ -38,7 +47,7 @@ class TestDefaults:
         """Default TUI settings."""
         cfg = Config(data_dir=tmp_path)
         assert cfg.tui.poll_interval == 0.5
-        assert cfg.tui.latency_history_max == 300
+        assert cfg.tui.sparkline_history_max == 300
 
     def test_computed_paths(self):
         """Computed paths resolve relative to data_dir."""
@@ -51,7 +60,7 @@ class TestDefaults:
 
 
 class TestLatencyThresholdOrdering:
-    """ok_ms must be strictly less than slow_ms."""
+    """ok_ms must be strictly less than slow_ms for both warm and cold sections."""
 
     @pytest.mark.parametrize(
         ("ok", "slow", "should_pass"),
@@ -63,15 +72,35 @@ class TestLatencyThresholdOrdering:
             (1, 2, True),
         ],
     )
-    def test_threshold_ordering(self, ok, slow, should_pass, tmp_path):
-        """Threshold ordering validation accepts valid, rejects invalid."""
+    def test_warm_threshold_ordering(self, ok, slow, should_pass, tmp_path):
+        """Warm threshold ordering validation accepts valid, rejects invalid."""
         if should_pass:
-            cfg = Config(data_dir=tmp_path, latency_threshold={"ok_ms": ok, "slow_ms": slow})
-            assert cfg.latency_threshold.ok_ms == ok
-            assert cfg.latency_threshold.slow_ms == slow
+            cfg = Config(data_dir=tmp_path, warm_latency_threshold={"ok_ms": ok, "slow_ms": slow})
+            assert cfg.warm_latency_threshold.ok_ms == ok
+            assert cfg.warm_latency_threshold.slow_ms == slow
         else:
             with pytest.raises(ValidationError, match="ok_ms"):
-                Config(data_dir=tmp_path, latency_threshold={"ok_ms": ok, "slow_ms": slow})
+                Config(data_dir=tmp_path, warm_latency_threshold={"ok_ms": ok, "slow_ms": slow})
+
+    @pytest.mark.parametrize(
+        ("ok", "slow", "should_pass"),
+        [
+            (200, 1000, True),
+            (600, 1500, True),
+            (1500, 1500, False),
+            (2000, 500, False),
+            (1, 2, True),
+        ],
+    )
+    def test_cold_threshold_ordering(self, ok, slow, should_pass, tmp_path):
+        """Cold threshold ordering validation accepts valid, rejects invalid."""
+        if should_pass:
+            cfg = Config(data_dir=tmp_path, cold_latency_threshold={"ok_ms": ok, "slow_ms": slow})
+            assert cfg.cold_latency_threshold.ok_ms == ok
+            assert cfg.cold_latency_threshold.slow_ms == slow
+        else:
+            with pytest.raises(ValidationError, match="ok_ms"):
+                Config(data_dir=tmp_path, cold_latency_threshold={"ok_ms": ok, "slow_ms": slow})
 
 
 class TestFieldValidation:
@@ -80,19 +109,26 @@ class TestFieldValidation:
     @pytest.mark.parametrize(
         ("section", "field", "value"),
         [
-            ("probed", "latency_interval", 0),
-            ("probed", "latency_interval", -1),
+            ("probed", "warm_latency_interval", 0),
+            ("probed", "warm_latency_interval", -1),
+            ("probed", "cold_latency_interval", 0),
+            ("probed", "cold_latency_interval", -1),
             ("probed", "vpn_interval", 0),
             ("probed", "ip_interval", -5.0),
             ("probed", "retention_days", 0),
             ("probed", "retention_days", -1),
-            ("probed", "latency_timeout", 0),
-            ("latency_threshold", "ok_ms", 0),
-            ("latency_threshold", "slow_ms", 0),
-            ("latency_threshold", "stale_seconds", -1),
+            ("probed", "warm_latency_timeout", 0),
+            ("probed", "cold_latency_timeout", 0),
+            ("warm_latency_threshold", "ok_ms", 0),
+            ("warm_latency_threshold", "slow_ms", 0),
+            ("warm_latency_threshold", "stale_seconds", -1),
+            ("cold_latency_threshold", "ok_ms", 0),
+            ("cold_latency_threshold", "slow_ms", 0),
+            ("cold_latency_threshold", "stale_seconds", -1),
             ("tray", "poll_interval", 0),
             ("tray", "poll_interval", -1),
             ("tui", "poll_interval", 0),
+            ("tui", "sparkline_history_max", 0),
         ],
     )
     def test_zero_and_negative_values_rejected(self, section, field, value, tmp_path):
@@ -100,7 +136,7 @@ class TestFieldValidation:
         with pytest.raises(ValidationError):
             Config(data_dir=tmp_path, **{section: {field: value}})
 
-    @pytest.mark.parametrize("section", ["probed", "latency_threshold", "tray", "tui"])
+    @pytest.mark.parametrize("section", ["probed", "warm_latency_threshold", "cold_latency_threshold", "tray", "tui"])
     def test_extra_fields_forbidden(self, section, tmp_path):
         """Unknown keys within a known section raise ValidationError."""
         with pytest.raises(ValidationError):
@@ -118,18 +154,33 @@ class TestConfigBuild:
     def test_no_config_file_returns_defaults(self, tmp_path):
         """Missing config file returns default Config."""
         cfg = Config.build(data_dir=tmp_path)
-        assert cfg.probed.latency_interval == 2.0
-        assert cfg.latency_threshold.ok_ms == 300
+        assert cfg.probed.warm_latency_interval == 2.0
+        assert cfg.probed.cold_latency_interval == 10.0
+        assert cfg.warm_latency_threshold.ok_ms == 300
+        assert cfg.cold_latency_threshold.ok_ms == 600
 
     def test_partial_override(self, tmp_path):
         """Valid TOML with partial overrides merges with defaults."""
-        (tmp_path / "config.toml").write_text("[probed]\nlatency_interval = 5.0\n\n[latency_threshold]\nok_ms = 100\n")
+        (tmp_path / "config.toml").write_text(
+            "[probed]\n"
+            "warm_latency_interval = 5.0\n"
+            "cold_latency_interval = 20.0\n"
+            "\n"
+            "[warm_latency_threshold]\n"
+            "ok_ms = 100\n"
+            "\n"
+            "[cold_latency_threshold]\n"
+            "ok_ms = 400\n"
+        )
 
         cfg = Config.build(data_dir=tmp_path)
-        assert cfg.probed.latency_interval == 5.0
+        assert cfg.probed.warm_latency_interval == 5.0
+        assert cfg.probed.cold_latency_interval == 20.0
         assert cfg.probed.vpn_interval == 10.0  # default preserved
-        assert cfg.latency_threshold.ok_ms == 100
-        assert cfg.latency_threshold.slow_ms == 800  # default preserved
+        assert cfg.warm_latency_threshold.ok_ms == 100
+        assert cfg.warm_latency_threshold.slow_ms == 800  # default preserved
+        assert cfg.cold_latency_threshold.ok_ms == 400
+        assert cfg.cold_latency_threshold.slow_ms == 1500  # default preserved
 
     def test_unknown_section_raises(self, tmp_path):
         """Unknown TOML section raises ValueError."""

@@ -1,6 +1,6 @@
 [project]
 name = "mb-netwatch"
-version = "0.1.5"
+version = "0.2.0"
 description = "macOS internet connection monitor"
 readme = "README.md"
 license = "MIT"
@@ -16,7 +16,7 @@ dependencies = [
     "aiohttp~=3.13.5",
     "psutil~=7.0",
     "mm-pymac~=0.0.3",
-    "mm-clikit~=0.1.10",
+    "mm-clikit~=0.2.0",
     "dnspython~=2.8.0",
 ]
 
@@ -38,7 +38,7 @@ exclude = [".claude/", "CLAUDE.md", "justfile", "uv.lock", "tests/", "tmp/"]
 dev = [
     "pytest~=9.0.3",
     "pytest-xdist~=3.8.0",
-    "ruff~=0.15.10",
+    "ruff~=0.15.11",
     "pip-audit~=2.10.0",
     "bandit~=1.9.4",
     "mypy~=1.20.1",

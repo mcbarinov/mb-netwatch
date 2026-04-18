@@ -1,14 +1,15 @@
 # mb-netwatch
 
-macOS internet connection monitor. Tracks latency, VPN status, and public IP at a glance via a menu bar icon.
+macOS internet connection monitor. Tracks warm + cold latency, VPN status, and public IP at a glance via a menu bar icon.
 
 > **Status:** Under active development.
 
 ## What it monitors
 
-Three types of checks run continuously in the background:
+Four types of checks run continuously in the background:
 
-- **Latency** — HTTP probes against captive portal endpoints every 2 seconds (first response wins)
+- **Latency (warm)** — HTTP probes over a reused keep-alive session, every 2 seconds (steady-state probe — first response wins)
+- **Latency (cold)** — HTTP probes over a fresh session (full TCP+TLS setup), every 10 seconds (catches connection-setup failures a warm probe hides)
 - **VPN status** — tunnel interface and routing table detection every 10 seconds
 - **Public IP** — address and country code via plain-text IP services every 60 seconds
 
@@ -40,7 +41,7 @@ Central application layer. Holds database, business logic, and probe implementat
 Three independent consumers of `Core`:
 
 - **CLI** (`cli/`) — command-line interface. Each command receives `Core` and `Output` via `CoreContext`.
-- **TUI** (`tui/`) — Textual terminal dashboard. Polls `core.db` for latest results and renders a live view with latency sparkline, VPN/IP status, and recent events.
+- **TUI** (`tui/`) — Textual terminal dashboard. Polls `core.db` for latest results and renders a live view with warm and cold latency sparklines, VPN/IP status, and recent events.
 - **Daemon** (`daemon.py`) — long-running background process. Orchestrates scheduling (loops, timers, signals) and delegates all probe/store logic to `core.service`.
 - **Tray** (`tray.py`) — macOS menu bar UI. Polls `core.db` for latest results and updates the icon.
 
@@ -48,7 +49,7 @@ Three independent consumers of `Core`:
 
 Two long-running processes in normal operation:
 
-- **probed** (`mb-netwatch probed`) — runs the daemon; measures latency every 2 s, VPN status every 10 s, public IP every 60 s; writes to SQLite via `core.service`.
+- **probed** (`mb-netwatch probed`) — runs the daemon; measures warm latency every 2 s, cold latency every 10 s, VPN status every 10 s, public IP every 60 s; writes to SQLite via `core.service`.
 - **tray** (`mb-netwatch tray`) — UI only; reads latest samples from SQLite via `core.db`, updates menu bar icon and dropdown.
 
 The tray must not perform network probing directly. This separation keeps UI responsive and simplifies debugging.
@@ -64,25 +65,32 @@ Optional TOML config at `~/.local/mb-netwatch/config.toml`. The file is not crea
 
 ```toml
 [probed]
-latency_interval = 2.0   # seconds between latency probes (default: 2.0)
-vpn_interval = 10.0      # seconds between VPN status checks (default: 10.0)
-ip_interval = 60.0       # seconds between public IP lookups (default: 60.0)
-purge_interval = 3600.0  # seconds between old-data purge runs (default: 3600.0)
-latency_timeout = 5.0    # HTTP timeout for latency probes (default: 5.0)
-ip_timeout = 5.0         # HTTP timeout for IP/country lookups (default: 5.0)
-retention_days = 30      # days to keep raw rows before purging (default: 30)
+warm_latency_interval = 2.0    # seconds between warm-latency probes (default: 2.0)
+cold_latency_interval = 10.0   # seconds between cold-latency probes (default: 10.0)
+vpn_interval = 10.0            # seconds between VPN status checks (default: 10.0)
+ip_interval = 60.0             # seconds between public IP lookups (default: 60.0)
+purge_interval = 3600.0        # seconds between old-data purge runs (default: 3600.0)
+warm_latency_timeout = 5.0     # HTTP timeout for warm-latency probes (default: 5.0)
+cold_latency_timeout = 5.0     # HTTP timeout for cold-latency probes (default: 5.0)
+ip_timeout = 5.0               # HTTP timeout for IP/country lookups (default: 5.0)
+retention_days = 30            # days to keep raw rows before purging (default: 30)
 
-[latency_threshold]
-ok_ms = 300              # latency below this → OK (default: 300)
-slow_ms = 800            # latency below this → SLOW, at or above → BAD (default: 800)
-stale_seconds = 10.0     # seconds before data is considered stale (default: 10.0)
+[warm_latency_threshold]
+ok_ms = 300              # warm latency below this → OK (default: 300)
+slow_ms = 800            # warm latency below this → SLOW, at or above → BAD (default: 800)
+stale_seconds = 10.0     # seconds before warm data is considered stale (default: 10.0)
+
+[cold_latency_threshold]
+ok_ms = 600              # cold latency below this → OK (default: 600)
+slow_ms = 1500           # cold latency below this → SLOW, at or above → BAD (default: 1500)
+stale_seconds = 30.0     # seconds before cold data is considered stale (default: 30.0)
 
 [tray]
 poll_interval = 2.0      # seconds between tray DB polls (default: 2.0)
 
 [tui]
-poll_interval = 0.5      # seconds between TUI dashboard DB polls (default: 0.5)
-latency_history_max = 300  # max latency readings in sparkline (default: 300)
+poll_interval = 0.5            # seconds between TUI dashboard DB polls (default: 0.5)
+sparkline_history_max = 300    # max latency readings drawn per sparkline (default: 300)
 ```
 
 The menu bar shows a fixed-width 3-character title: 2-letter country code + status symbol (`●` OK / `◐` SLOW / `○` BAD / `✕` DOWN), e.g. `US●`. Click the menu bar icon to see the exact latency in the dropdown. If probed stops writing data, the symbol changes to `–` (en dash) after `stale_seconds` seconds (default 10). While waiting for the first data, a middle dot `·` is displayed.

@@ -24,12 +24,19 @@ class Output(DualModeOutput):
         """Print one-shot probe result."""
         lines: list[str] = []
 
-        # Latency
-        if result.latency_ms is None:
-            lines.append("Latency: down")
+        # Latency (warm): reused keep-alive session — steady-state probe
+        if result.latency_warm_ms is None:
+            lines.append("Latency warm: down")
         else:
-            host = urlparse(result.endpoint).hostname if result.endpoint else "?"
-            lines.append(f"Latency: {result.latency_ms:.0f}ms ({host})")
+            host = urlparse(result.latency_warm_endpoint).hostname if result.latency_warm_endpoint else "?"
+            lines.append(f"Latency warm: {result.latency_warm_ms:.0f}ms ({host})")
+
+        # Latency (cold): fresh session — full TCP+TLS setup probe
+        if result.latency_cold_ms is None:
+            lines.append("Latency cold: down")
+        else:
+            host = urlparse(result.latency_cold_endpoint).hostname if result.latency_cold_endpoint else "?"
+            lines.append(f"Latency cold: {result.latency_cold_ms:.0f}ms ({host})")
 
         # VPN
         if not result.vpn_active:

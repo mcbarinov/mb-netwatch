@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 async def run_daemon(core: Core) -> None:
-    """Launch latency, VPN, IP, and purge loops; shut down cleanly on signal."""
+    """Launch warm-latency, cold-latency, VPN, IP, and purge loops; shut down cleanly on signal."""
     log.info("probed starting.")
     write_pid_file(core.config.probed_pid_path)
 
@@ -23,7 +23,8 @@ async def run_daemon(core: Core) -> None:
         loop.add_signal_handler(sig, shutdown.set)
 
     cfg = core.config.probed
-    core.db.purge_old_probe_latency(cfg.retention_days)
+    core.db.purge_old_probe_latency_warm(cfg.retention_days)
+    core.db.purge_old_probe_latency_cold(cfg.retention_days)
     core.db.purge_old_probe_vpn(cfg.retention_days)
     core.db.purge_old_probe_ip(cfg.retention_days)
 
@@ -32,7 +33,8 @@ async def run_daemon(core: Core) -> None:
 
     try:
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(_latency_loop(core, shutdown))
+            tg.create_task(_latency_warm_loop(core, shutdown))
+            tg.create_task(_latency_cold_loop(core, shutdown))
             tg.create_task(_vpn_loop(core, shutdown, ip_trigger))
             tg.create_task(_ip_loop(core, shutdown, ip_trigger))
             tg.create_task(_purge_loop(core, shutdown))
@@ -41,7 +43,7 @@ async def run_daemon(core: Core) -> None:
             log.exception("probed: fatal error in task group", exc_info=exc)
         raise
     finally:
-        await core.service.close_latency_session()
+        await core.service.close_warm_latency_session()
         core.config.probed_pid_path.unlink(missing_ok=True)
         log.info("probed stopped.")
 
@@ -63,14 +65,24 @@ async def _wait_ip(shutdown: asyncio.Event, ip_trigger: asyncio.Event, seconds: 
         shutdown_task.cancel()
 
 
-async def _latency_loop(core: Core, shutdown: asyncio.Event) -> None:
-    """Run latency probes on interval."""
+async def _latency_warm_loop(core: Core, shutdown: asyncio.Event) -> None:
+    """Run warm-latency probes on interval (reused keep-alive session)."""
     while not shutdown.is_set():
         try:
-            await core.service.run_latency_check()
+            await core.service.run_latency_warm_check()
         except Exception:
-            log.exception("latency loop: unexpected error")
-        await _wait_shutdown(shutdown, core.config.probed.latency_interval)
+            log.exception("warm-latency loop: unexpected error")
+        await _wait_shutdown(shutdown, core.config.probed.warm_latency_interval)
+
+
+async def _latency_cold_loop(core: Core, shutdown: asyncio.Event) -> None:
+    """Run cold-latency probes on interval (fresh session per cycle — full TCP+TLS setup)."""
+    while not shutdown.is_set():
+        try:
+            await core.service.run_latency_cold_check()
+        except Exception:
+            log.exception("cold-latency loop: unexpected error")
+        await _wait_shutdown(shutdown, core.config.probed.cold_latency_interval)
 
 
 async def _vpn_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
@@ -112,10 +124,17 @@ async def _purge_loop(core: Core, shutdown: asyncio.Event) -> None:
         await _wait_shutdown(shutdown, cfg.purge_interval)
         if not shutdown.is_set():
             try:
-                lat_deleted = core.db.purge_old_probe_latency(cfg.retention_days)
+                warm_deleted = core.db.purge_old_probe_latency_warm(cfg.retention_days)
+                cold_deleted = core.db.purge_old_probe_latency_cold(cfg.retention_days)
                 vpn_deleted = core.db.purge_old_probe_vpn(cfg.retention_days)
                 ip_deleted = core.db.purge_old_probe_ip(cfg.retention_days)
             except Exception:
                 log.exception("purge loop: unexpected error")
             else:
-                log.info("Purged %d latency, %d VPN, %d IP old probe rows.", lat_deleted, vpn_deleted, ip_deleted)
+                log.info(
+                    "Purged %d warm-latency, %d cold-latency, %d VPN, %d IP old probe rows.",
+                    warm_deleted,
+                    cold_deleted,
+                    vpn_deleted,
+                    ip_deleted,
+                )

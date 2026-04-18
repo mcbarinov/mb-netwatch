@@ -5,9 +5,9 @@
 
 ## Latency
 
-Latency is measured via HTTP/HTTPS requests, not ICMP ping — many VPN tunnels don't route ICMP traffic, making ping unreliable. HTTP requests work over any TCP-capable connection regardless of VPN configuration.
+Two independent HTTP latency probes run side by side: **warm** and **cold**. Neither uses ICMP ping — many VPN tunnels don't route ICMP traffic, which is why this project measures over HTTP instead. HTTP works over any TCP-capable connection regardless of VPN configuration.
 
-Probe targets are **captive portal detection endpoints** — lightweight URLs that OS and browser vendors operate specifically for connectivity checking:
+Both probes target the same set of **captive portal detection endpoints** — lightweight URLs that OS and browser vendors operate specifically for connectivity checking:
 
 - `https://connectivitycheck.gstatic.com/generate_204` — Google, HTTPS, 204 No Content
 - `https://www.apple.com/library/test/success.html` — Apple, HTTPS, tiny HTML
@@ -23,15 +23,33 @@ Probe targets are **captive portal detection endpoints** — lightweight URLs th
 - **Never blocked by ISPs** — blocking would break captive portal detection on every phone, laptop, and tablet
 - **Multiple providers** — if one company's infrastructure has issues, the others still work
 
-**How probing works:**
+**Shared request mechanics (both probes):**
 1. Requests are sent to all endpoints simultaneously
 2. The first successful response wins — all remaining requests are cancelled immediately
-3. If no response arrives within 5 seconds — status is "Down"
-4. Connections are reused between checks (keep-alive) — lower baseline latency makes network degradation more visible, and eliminates measurement noise from TLS handshake variance. If sustained failures are detected, the HTTP session is automatically recreated to recover from stale connections
+3. If no response arrives within the timeout (default 5 seconds) — status is "Down"
 
-**Polling:**
-- A probe runs every 2 seconds
-- Each measurement is stored as a raw value in the database
+### Latency (warm)
+
+Uses one long-lived `aiohttp.ClientSession` across probe cycles (HTTP keep-alive, pooled connections). Measures steady-state responsiveness over an established connection — effectively the HTTP analogue of ping.
+
+- Low baseline latency makes steady-state network degradation visible
+- Eliminates TLS-handshake variance from measurement noise
+- On sustained failure the session is automatically recreated to drop stale pooled connections
+- Runs every **2 seconds** by default
+- Stored in the `probe_latency_warm` table
+
+### Latency (cold)
+
+Creates a fresh `aiohttp.ClientSession` for every probe — no pooling, no keep-alive reuse. Measures the full cost of establishing a new connection end-to-end: DNS resolution, TCP handshake, TLS handshake, and the first HTTP round-trip.
+
+This is the complement to the warm probe. A browser opens new connections for new pages, new tabs, and new hosts; when that setup path is broken (DNS slow, TCP handshake failing, TLS stalled, firewall state table exhausted), the warm probe can still report "all good" because it reuses a connection that was opened before the problem started. Cold catches exactly that class of incident.
+
+- Baseline is higher than warm by roughly the TCP + TLS handshake cost (~100-300 ms on a healthy link)
+- No self-healing logic needed — each cycle builds and tears down its own session
+- Runs every **10 seconds** by default (cheaper than warm would be on paper, but each cycle is more expensive per request, so the interval is tuned for a reasonable load on the captive-portal endpoints)
+- Stored in the `probe_latency_cold` table
+
+Thresholds (`ok_ms`, `slow_ms`, `stale_seconds`) are configured separately for warm and cold via `[warm_latency_threshold]` and `[cold_latency_threshold]` TOML sections. Defaults for cold are intentionally higher to account for the handshake overhead.
 
 ## VPN Status
 

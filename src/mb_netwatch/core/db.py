@@ -1,11 +1,14 @@
-"""SQLite storage for probe results: warm/cold latency, VPN, and IP."""
+"""SQLite storage for probe results: warm/cold latency, VPN, IP, and DNS."""
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, Self
 
 from mm_clikit import SqliteDb, SqliteRow
+
+from mb_netwatch.core.probes.dns import DnsResolverSample, DnsResult
 
 TunnelMode = Literal["full", "split"]
 
@@ -71,6 +74,29 @@ class ProbeIp(SqliteRow):
         return cls(created_at=row["created_at"], updated_at=row["updated_at"], ip=row["ip"], country_code=row["country_code"])
 
 
+class ProbeDns(SqliteRow):
+    """Single DNS probe row — one cycle across every system resolver."""
+
+    created_at: float  # UTC Unix timestamp
+    primary_ms: float | None  # resolvers[0].resolve_ms; None on empty list or when primary had no latency
+    primary_error: str | None  # resolvers[0].error; None on clean success or empty list
+    primary_address: str | None  # resolvers[0].address; None when resolver list is empty
+    resolvers: list[DnsResolverSample]  # Full per-resolver list reconstructed from resolvers_json
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> Self:
+        """Construct from a sqlite3.Row — parses resolvers_json back into DnsResolverSample models."""
+        raw = json.loads(row["resolvers_json"])
+        resolvers = [DnsResolverSample.model_validate(s) for s in raw]
+        return cls(
+            created_at=row["created_at"],
+            primary_ms=row["primary_ms"],
+            primary_error=row["primary_error"],
+            primary_address=row["primary_address"],
+            resolvers=resolvers,
+        )
+
+
 _MIGRATE_V1 = """
 CREATE TABLE probe_latency_warm (
     created_at REAL NOT NULL, latency_ms REAL, endpoint TEXT
@@ -95,6 +121,15 @@ CREATE TABLE probe_ip (
 );
 CREATE INDEX idx_probe_ip_created_at ON probe_ip(created_at);
 CREATE INDEX idx_probe_ip_updated_at ON probe_ip(updated_at);
+
+CREATE TABLE probe_dns (
+    created_at REAL NOT NULL,
+    primary_ms REAL,
+    primary_error TEXT,
+    primary_address TEXT,
+    resolvers_json TEXT NOT NULL
+);
+CREATE INDEX idx_probe_dns_created_at ON probe_dns(created_at);
 """
 
 
@@ -252,5 +287,48 @@ class Db(SqliteDb):
         """Delete IP probes not confirmed within *retention_days*. Return rows deleted."""
         cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
         cursor = self.conn.execute("DELETE FROM probe_ip WHERE updated_at < ?", (cutoff.timestamp(),))
+        self.conn.commit()
+        return cursor.rowcount
+
+    # -- DNS probes ------------------------------------------------------------
+
+    def insert_probe_dns(self, ts: datetime, result: DnsResult) -> None:
+        """Insert a single DNS probe result. Primary scalars are derived from resolvers[0]."""
+        primary = result.resolvers[0] if result.resolvers else None
+        resolvers_json = json.dumps([s.model_dump() for s in result.resolvers])
+        self.conn.execute(
+            "INSERT INTO probe_dns (created_at, primary_ms, primary_error, primary_address, resolvers_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                ts.timestamp(),
+                primary.resolve_ms if primary else None,
+                primary.error if primary else None,
+                primary.address if primary else None,
+                resolvers_json,
+            ),
+        )
+        self.conn.commit()
+
+    def fetch_latest_probe_dns(self) -> ProbeDns | None:
+        """Return the most recent DNS probe, or None if table is empty."""
+        row = self.conn.execute(
+            "SELECT created_at, primary_ms, primary_error, primary_address, resolvers_json "
+            "FROM probe_dns ORDER BY created_at DESC LIMIT 1",
+        ).fetchone()
+        return ProbeDns.from_row(row) if row else None
+
+    def fetch_recent_probe_dns(self, limit: int) -> list[ProbeDns]:
+        """Return the last *limit* DNS probes, ordered oldest-first (for sparkline / history consistency)."""
+        rows = self.conn.execute(
+            "SELECT created_at, primary_ms, primary_error, primary_address, resolvers_json "
+            "FROM probe_dns ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [ProbeDns.from_row(r) for r in reversed(rows)]
+
+    def purge_old_probe_dns(self, retention_days: int) -> int:
+        """Delete DNS probes older than *retention_days*. Return rows deleted."""
+        cutoff = datetime.now(tz=UTC) - timedelta(days=retention_days)
+        cursor = self.conn.execute("DELETE FROM probe_dns WHERE created_at < ?", (cutoff.timestamp(),))
         self.conn.commit()
         return cursor.rowcount

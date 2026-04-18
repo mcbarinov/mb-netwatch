@@ -6,10 +6,11 @@ macOS internet connection monitor. Tracks warm + cold latency, VPN status, and p
 
 ## What it monitors
 
-Four types of checks run continuously in the background:
+Five types of checks run continuously in the background:
 
 - **Latency (warm)** — HTTP probes over a reused keep-alive session, every 2 seconds (steady-state probe — first response wins)
 - **Latency (cold)** — HTTP probes over a fresh session (full TCP+TLS setup), every 10 seconds (catches connection-setup failures a warm probe hides)
+- **DNS** — UDP query to every system resolver in parallel, every 10 seconds (reachability + cached-answer speed of the resolvers macOS is actually using right now)
 - **VPN status** — tunnel interface and routing table detection every 10 seconds
 - **Public IP** — address and country code via plain-text IP services every 60 seconds
 
@@ -69,10 +70,12 @@ warm_latency_interval = 2.0    # seconds between warm-latency probes (default: 2
 cold_latency_interval = 10.0   # seconds between cold-latency probes (default: 10.0)
 vpn_interval = 10.0            # seconds between VPN status checks (default: 10.0)
 ip_interval = 60.0             # seconds between public IP lookups (default: 60.0)
+dns_interval = 10.0            # seconds between DNS probes (default: 10.0)
 purge_interval = 3600.0        # seconds between old-data purge runs (default: 3600.0)
 warm_latency_timeout = 5.0     # HTTP timeout for warm-latency probes (default: 5.0)
 cold_latency_timeout = 5.0     # HTTP timeout for cold-latency probes (default: 5.0)
 ip_timeout = 5.0               # HTTP timeout for IP/country lookups (default: 5.0)
+dns_timeout = 2.0              # per-resolver UDP query timeout for DNS probes (default: 2.0)
 retention_days = 30            # days to keep raw rows before purging (default: 30)
 
 [warm_latency_threshold]
@@ -84,6 +87,9 @@ stale_seconds = 10.0     # seconds before warm data is considered stale (default
 ok_ms = 600              # cold latency below this → OK (default: 600)
 slow_ms = 1500           # cold latency below this → SLOW, at or above → BAD (default: 1500)
 stale_seconds = 30.0     # seconds before cold data is considered stale (default: 30.0)
+
+[dns_threshold]
+stale_seconds = 30.0     # seconds before DNS data is considered stale (default: 30.0)
 
 [tray]
 poll_interval = 2.0      # seconds between tray DB polls (default: 2.0)

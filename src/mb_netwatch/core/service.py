@@ -73,7 +73,7 @@ class Service:
                 check_latency_cold(http_timeout=cfg.cold_latency_timeout),
                 asyncio.to_thread(check_vpn),
                 check_ip(http_timeout=cfg.ip_timeout),
-                check_dns(),
+                check_dns(timeout=cfg.dns_timeout),
             )
         return ProbeResult(
             latency_warm_ms=latency_warm.latency_ms,
@@ -118,6 +118,16 @@ class Service:
         result = await check_latency_cold(http_timeout=cfg.cold_latency_timeout)
         ts = datetime.now(tz=UTC)
         self._db.insert_probe_latency_cold(ts, result.latency_ms, result.endpoint)
+
+    async def run_dns_check(self) -> None:
+        """Run a single DNS probe across all system resolvers and store the result.
+
+        No shared state — ``check_dns`` rediscovers the resolver set each cycle via ``scutil --dns``.
+        """
+        cfg = self._config.probed
+        result = await check_dns(timeout=cfg.dns_timeout)
+        ts = datetime.now(tz=UTC)
+        self._db.insert_probe_dns(ts, result)
 
     async def run_vpn_check(self) -> bool:
         """Run a single VPN check, log and store the result. Return whether VPN is active."""

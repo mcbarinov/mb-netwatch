@@ -7,7 +7,7 @@ from mm_clikit import write_pid_file
 from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.core.core import Core
-from mb_netwatch.core.db import ProbeIp, ProbeLatencyCold, ProbeLatencyWarm, ProbeVpn
+from mb_netwatch.core.db import ProbeDns, ProbeIp, ProbeLatencyCold, ProbeLatencyWarm, ProbeVpn
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ class NetwatchTray:
         # Info items (non-interactive)
         self._latency_warm_item = MenuItem("Latency warm: ...", enabled=False)
         self._latency_cold_item = MenuItem("Latency cold: ...", enabled=False)
+        self._dns_item = MenuItem("DNS: ...", enabled=False)
         self._vpn_item = MenuItem("VPN: ...", enabled=False)
         self._ip_item = MenuItem("IP: ...", enabled=False)
 
@@ -41,6 +42,7 @@ class NetwatchTray:
             [
                 self._latency_warm_item,
                 self._latency_cold_item,
+                self._dns_item,
                 self._vpn_item,
                 self._ip_item,
                 MenuSeparator(),
@@ -66,14 +68,17 @@ class NetwatchTray:
         """
         latency_warm = self._core.db.fetch_latest_probe_latency_warm()
         latency_cold = self._core.db.fetch_latest_probe_latency_cold()
+        dns = self._core.db.fetch_latest_probe_dns()
         ip = self._core.db.fetch_latest_probe_ip()
         vpn = self._core.db.fetch_latest_probe_vpn()
         warm_stale = self._is_warm_stale(latency_warm)
         cold_stale = self._is_cold_stale(latency_cold)
+        dns_stale = self._is_dns_stale(dns)
 
         self._tray.title = self._format_title(latency_warm, ip, stale=warm_stale)
         self._latency_warm_item.title = self._format_latency_warm(latency_warm, stale=warm_stale)
         self._latency_cold_item.title = self._format_latency_cold(latency_cold, stale=cold_stale)
+        self._dns_item.title = self._format_dns(dns, stale=dns_stale)
         self._vpn_item.title = self._format_vpn(vpn, stale=warm_stale)
         self._ip_item.title = self._format_ip(ip, stale=warm_stale)
 
@@ -118,6 +123,23 @@ class NetwatchTray:
             label += f" ({vpn.provider})"
         return label
 
+    def _format_dns(self, dns: ProbeDns | None, *, stale: bool) -> str:
+        """Build the DNS status string for the dropdown menu item (primary resolver only)."""
+        if dns is None:
+            return "DNS: ..."
+        if stale:
+            return "DNS: stale"
+        if not dns.resolvers:
+            # Empty resolver list is its own diagnostic: no DNS configured, broken configd, or
+            # VPN tearing down. Distinct from "primary errored".
+            return "DNS: no config"
+        primary = dns.resolvers[0]
+        if primary.error is not None:
+            return f"DNS: {primary.error} ({primary.address})"
+        if primary.resolve_ms is None:
+            return f"DNS: ? ({primary.address})"
+        return f"DNS: {primary.resolve_ms:.0f}ms ({primary.address})"
+
     def _format_ip(self, ip: ProbeIp | None, *, stale: bool) -> str:
         """Build the public IP string for the dropdown menu item."""
         if stale:
@@ -151,3 +173,9 @@ class NetwatchTray:
         if latency is None:
             return False
         return (time.time() - latency.created_at) > self._core.config.cold_latency_threshold.stale_seconds
+
+    def _is_dns_stale(self, dns: ProbeDns | None) -> bool:
+        """Check if the latest DNS row is too old to be trusted."""
+        if dns is None:
+            return False
+        return (time.time() - dns.created_at) > self._core.config.dns_threshold.stale_seconds

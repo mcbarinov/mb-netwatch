@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 async def run_daemon(core: Core) -> None:
-    """Launch warm-latency, cold-latency, VPN, IP, and purge loops; shut down cleanly on signal."""
+    """Launch warm-latency, cold-latency, DNS, VPN, IP, and purge loops; shut down cleanly on signal."""
     log.info("probed starting.")
     write_pid_file(core.config.probed_pid_path)
 
@@ -27,6 +27,7 @@ async def run_daemon(core: Core) -> None:
     core.db.purge_old_probe_latency_cold(cfg.retention_days)
     core.db.purge_old_probe_vpn(cfg.retention_days)
     core.db.purge_old_probe_ip(cfg.retention_days)
+    core.db.purge_old_probe_dns(cfg.retention_days)
 
     # VPN loop sets this event when VPN state changes, so IP loop wakes up immediately instead of waiting for its full interval
     ip_trigger = asyncio.Event()
@@ -35,6 +36,7 @@ async def run_daemon(core: Core) -> None:
         async with asyncio.TaskGroup() as tg:
             tg.create_task(_latency_warm_loop(core, shutdown))
             tg.create_task(_latency_cold_loop(core, shutdown))
+            tg.create_task(_dns_loop(core, shutdown))
             tg.create_task(_vpn_loop(core, shutdown, ip_trigger))
             tg.create_task(_ip_loop(core, shutdown, ip_trigger))
             tg.create_task(_purge_loop(core, shutdown))
@@ -85,6 +87,16 @@ async def _latency_cold_loop(core: Core, shutdown: asyncio.Event) -> None:
         await _wait_shutdown(shutdown, core.config.probed.cold_latency_interval)
 
 
+async def _dns_loop(core: Core, shutdown: asyncio.Event) -> None:
+    """Run DNS probes on interval (one cycle queries every system resolver in parallel)."""
+    while not shutdown.is_set():
+        try:
+            await core.service.run_dns_check()
+        except Exception:
+            log.exception("dns loop: unexpected error")
+        await _wait_shutdown(shutdown, core.config.probed.dns_interval)
+
+
 async def _vpn_loop(core: Core, shutdown: asyncio.Event, ip_trigger: asyncio.Event) -> None:
     """Run VPN checks on interval. Signal IP loop on state change."""
     prev_active: bool | None = None
@@ -128,13 +140,15 @@ async def _purge_loop(core: Core, shutdown: asyncio.Event) -> None:
                 cold_deleted = core.db.purge_old_probe_latency_cold(cfg.retention_days)
                 vpn_deleted = core.db.purge_old_probe_vpn(cfg.retention_days)
                 ip_deleted = core.db.purge_old_probe_ip(cfg.retention_days)
+                dns_deleted = core.db.purge_old_probe_dns(cfg.retention_days)
             except Exception:
                 log.exception("purge loop: unexpected error")
             else:
                 log.info(
-                    "Purged %d warm-latency, %d cold-latency, %d VPN, %d IP old probe rows.",
+                    "Purged %d warm-latency, %d cold-latency, %d VPN, %d IP, %d DNS old probe rows.",
                     warm_deleted,
                     cold_deleted,
                     vpn_deleted,
                     ip_deleted,
+                    dns_deleted,
                 )

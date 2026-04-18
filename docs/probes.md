@@ -122,6 +122,8 @@ The probe measures **latency of the system's own DNS resolvers**, not of public 
 - Short TTL (300 s) — does not get pinned indefinitely in upstream caches
 - Always an A record — no AAAA / dual-stack complications
 
+Because the canary's 300 s TTL is much longer than the probe cadence, most measured round-trips are served from the upstream resolver's cache. The stored `resolve_ms` therefore reflects **resolver-path reachability and cached-answer speed**, not full upstream recursion health — cache-busting is intentionally avoided because random-subdomain hammering of a domain we do not control is abusive and produces misleading NXDOMAIN signals.
+
 **What is deliberately not measured:**
 - **Correctness of the answer** — no IP comparison, no DNSSEC validation, no hijack detection. The probe cares about latency and reachability only.
 - **AAAA records** — only A is queried. Dual-stack measurement would double the data without adding useful failure signal for this use case.

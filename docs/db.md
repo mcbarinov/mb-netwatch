@@ -42,6 +42,24 @@ Indexes: `created_at`, `updated_at`.
 
 Indexes: `created_at`, `updated_at`.
 
+### probe_dns
+
+Every probe cycle inserts a new row. No deduplication — each measurement is unique.
+
+Primary-scalar columns mirror `resolvers[0]` for cheap status / sparkline queries. The full per-resolver list (including fallbacks) is preserved in `resolvers_json` so history views can show multi-resolver breakdowns without a second table.
+
+| Column          | Type | Nullable | Description                                                                            |
+|-----------------|------|----------|----------------------------------------------------------------------------------------|
+| created_at      | REAL | NO       | Probe timestamp                                                                         |
+| primary_ms      | REAL | YES      | `resolvers[0].resolve_ms`; NULL when resolver list is empty or primary had no latency   |
+| primary_error   | TEXT | YES      | `resolvers[0].error` (`timeout`/`network`/`malformed`/rcode-name); NULL on clean success or empty list |
+| primary_address | TEXT | YES      | `resolvers[0].address`; NULL when resolver list is empty                                |
+| resolvers_json  | TEXT | NO       | JSON array of `{address, resolve_ms, error}` objects for every probed resolver. `"[]"` when the system has no DNS configured |
+
+Indexes: `created_at`.
+
+Note: when `resolvers_json` is `"[]"`, all three `primary_*` scalars are NULL — this is the sentinel for "probe ran, scutil returned no usable resolvers".
+
 ## Deduplication (probe_vpn, probe_ip)
 
 These two tables use **upsert deduplication** to avoid storing identical consecutive rows.

@@ -18,10 +18,12 @@ class ProbedConfig(BaseModel):
     cold_latency_interval: float = Field(default=10.0, gt=0)  # seconds between cold-latency probes (fresh session per call)
     vpn_interval: float = Field(default=10.0, gt=0)  # seconds between VPN status checks
     ip_interval: float = Field(default=60.0, gt=0)  # seconds between public IP lookups
+    dns_interval: float = Field(default=10.0, gt=0)  # seconds between DNS probes (one cycle queries every system resolver)
     purge_interval: float = Field(default=3600.0, gt=0)  # seconds between old-data purge runs
     warm_latency_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for warm-latency probes (seconds)
     cold_latency_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for cold-latency probes (seconds)
     ip_timeout: float = Field(default=5.0, gt=0)  # HTTP timeout for IP/country lookups (seconds)
+    dns_timeout: float = Field(default=2.0, gt=0)  # per-resolver UDP query timeout for DNS probes (seconds)
     retention_days: int = Field(default=30, gt=0)  # days to keep raw measurement rows before purging
 
 
@@ -61,6 +63,14 @@ class ColdLatencyThresholdConfig(BaseModel):
         return self
 
 
+class DnsThresholdConfig(BaseModel):
+    """DNS display thresholds. No ok/slow bands — tray shows raw ms without classification."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    stale_seconds: float = Field(default=30.0, gt=0)  # seconds since last DNS row before data is considered stale
+
+
 class TrayConfig(BaseModel):
     """Settings for the menu bar UI process."""
 
@@ -93,6 +103,7 @@ class Config(BaseDataDirConfig):
     warm_latency_threshold: WarmLatencyThresholdConfig = Field(default_factory=WarmLatencyThresholdConfig)
     # Cold-latency classification thresholds for display.
     cold_latency_threshold: ColdLatencyThresholdConfig = Field(default_factory=ColdLatencyThresholdConfig)
+    dns_threshold: DnsThresholdConfig = Field(default_factory=DnsThresholdConfig)  # DNS display thresholds
     tray: TrayConfig = Field(default_factory=TrayConfig)  # menu bar UI settings
     tui: TuiConfig = Field(default_factory=TuiConfig)  # TUI dashboard settings
 
@@ -148,7 +159,9 @@ class Config(BaseDataDirConfig):
             with config_path.open("rb") as f:
                 data = tomllib.load(f)
 
-            known_sections = frozenset({"probed", "warm_latency_threshold", "cold_latency_threshold", "tray", "tui"})
+            known_sections = frozenset(
+                {"probed", "warm_latency_threshold", "cold_latency_threshold", "dns_threshold", "tray", "tui"}
+            )
             unknown = set(data.keys()) - known_sections
             if unknown:
                 raise ValueError(f"Unknown config sections: {', '.join(sorted(unknown))}")
@@ -156,6 +169,7 @@ class Config(BaseDataDirConfig):
             kwargs["probed"] = ProbedConfig(**data.get("probed", {}))
             kwargs["warm_latency_threshold"] = WarmLatencyThresholdConfig(**data.get("warm_latency_threshold", {}))
             kwargs["cold_latency_threshold"] = ColdLatencyThresholdConfig(**data.get("cold_latency_threshold", {}))
+            kwargs["dns_threshold"] = DnsThresholdConfig(**data.get("dns_threshold", {}))
             kwargs["tray"] = TrayConfig(**data.get("tray", {}))
             kwargs["tui"] = TuiConfig(**data.get("tui", {}))
 

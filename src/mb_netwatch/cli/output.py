@@ -17,6 +17,17 @@ class StartStopResult(BaseModel):
     message: str  # Human-readable status message
 
 
+class RaycastInstallResult(BaseModel):
+    """Result of installing Raycast script commands."""
+
+    model_config = ConfigDict(frozen=True)
+
+    target_dir: str  # Absolute path to the install directory
+    installed: list[str]  # Names of installed script files
+    refreshed: bool  # True if the directory already contained scripts (re-install)
+    command: str  # Resolved command prefix baked into the scripts
+
+
 class Output(DualModeOutput):
     """Handles all CLI output in JSON or human-readable format."""
 
@@ -74,3 +85,18 @@ class Output(DualModeOutput):
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""
         self.output(json_data=result.model_dump(), display_data=result.message)
+
+    def print_raycast_installed(self, result: RaycastInstallResult) -> None:
+        """Print Raycast install confirmation."""
+        count = len(result.installed)
+        if result.refreshed:
+            display: str = f"Refreshed {count} Raycast scripts in {result.target_dir}"
+        else:
+            display = (
+                f"Installed {count} Raycast scripts to {result.target_dir}\n"
+                "\n"
+                "One-time setup in Raycast:\n"
+                "  Settings \u2192 Extensions \u2192 Script Commands \u2192 Add Directories\n"
+                "  \u2192 select the path above"
+            )
+        self.output(json_data=result.model_dump(), display_data=display)

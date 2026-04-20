@@ -8,6 +8,7 @@ from mm_clikit import CoreContext, TyperPlus
 
 from mb_netwatch.cli.commands.probe import probe
 from mb_netwatch.cli.commands.probed import probed
+from mb_netwatch.cli.commands.raycast.install import install as raycast_install
 from mb_netwatch.cli.commands.start import start
 from mb_netwatch.cli.commands.stop import stop
 from mb_netwatch.cli.commands.tray import tray
@@ -41,3 +42,7 @@ app.command()(probed)
 app.command()(start)
 app.command()(stop)
 app.command()(tray)
+
+raycast_app = TyperPlus()
+raycast_app.command(name="install")(raycast_install)
+app.add_typer(raycast_app, name="raycast", help="Manage Raycast script commands.")

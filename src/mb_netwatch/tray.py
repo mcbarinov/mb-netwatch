@@ -8,8 +8,12 @@ from mm_pymac import MenuItem, MenuSeparator, TrayApp
 
 from mb_netwatch.core.core import Core
 from mb_netwatch.core.db import ProbeDns, ProbeIp, ProbeLatencyCold, ProbeLatencyWarm, ProbeVpn
+from mb_netwatch.process_control import stop_by_pid_file
 
 log = logging.getLogger(__name__)
+
+_STOP_PROBED_TIMEOUT = 5.0
+"""Seconds to wait for graceful SIGTERM shutdown of probed before SIGKILL."""
 
 
 class NetwatchTray:
@@ -37,7 +41,8 @@ class NetwatchTray:
         self._vpn_item = MenuItem("VPN: ...", enabled=False)
         self._ip_item = MenuItem("IP: ...", enabled=False)
 
-        quit_item = MenuItem("Quit", callback=lambda _: self._tray.quit())
+        close_tray_item = MenuItem("Close tray (keep monitoring)", callback=lambda _: self._tray.quit())
+        quit_netwatch_item = MenuItem("Quit Netwatch (stop monitoring)", callback=lambda _: self._quit_netwatch())
         self._tray.set_menu(
             [
                 self._latency_warm_item,
@@ -46,7 +51,8 @@ class NetwatchTray:
                 self._vpn_item,
                 self._ip_item,
                 MenuSeparator(),
-                quit_item,
+                close_tray_item,
+                quit_netwatch_item,
             ]
         )
 
@@ -59,6 +65,21 @@ class NetwatchTray:
         finally:
             self._core.config.tray_pid_path.unlink(missing_ok=True)
             log.info("tray stopped.")
+
+    def _quit_netwatch(self) -> None:
+        """Stop the probed daemon (if running) and quit the tray.
+
+        Uses force_kill=True: the user's intent is unambiguous and leaving a
+        zombie probed after a "Quit Netwatch" click would be worse than a SIGKILL.
+        """
+        result = stop_by_pid_file(
+            self._core.config.probed_pid_path,
+            timeout=_STOP_PROBED_TIMEOUT,
+            force_kill=True,
+        )
+        if result.outcome == "stopped":
+            log.info("probed stopped from tray (pid %d).", result.pid)
+        self._tray.quit()
 
     def _refresh(self) -> None:
         """Poll DB and update menu bar title and detail items.

@@ -22,8 +22,8 @@ See [docs/probes.md](docs/probes.md) for detailed algorithms, endpoints, and des
 - `mb-netwatch probe` — one-shot connectivity probe, print result
 - `mb-netwatch probed` — run continuous background measurements
 - `mb-netwatch tray` — run menu bar UI process
-- `mb-netwatch start [probed|tray]` — start processes in the background (no argument = both)
-- `mb-netwatch stop [probed|tray]` — stop background processes (no argument = both)
+- `mb-netwatch start` — start probed and tray in the background
+- `mb-netwatch stop` — stop probed and tray
 - `mb-netwatch raycast install` — install Raycast Script Commands (see [docs/raycast.md](docs/raycast.md))
 
 ## Architecture

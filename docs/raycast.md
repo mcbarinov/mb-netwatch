@@ -9,7 +9,6 @@
 | Netwatch Probe | Run a one-shot connectivity probe (warm/cold latency, VPN, IP, DNS) |
 | Start Netwatch | Start the probed daemon and tray in the background |
 | Stop Netwatch | Stop the probed daemon and tray |
-| Start Netwatch Tray | Start only the menu bar tray icon in the background |
 
 `Netwatch Probe` runs in `fullOutput` mode — the five-line result appears in a Raycast popup, Esc closes it. The other commands run silently with a brief HUD notification.
 

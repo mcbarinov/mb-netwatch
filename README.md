@@ -24,6 +24,7 @@ See [docs/probes.md](docs/probes.md) for detailed algorithms, endpoints, and des
 - `mb-netwatch tray` — run menu bar UI process
 - `mb-netwatch start` — start probed and tray in the background
 - `mb-netwatch stop` — stop probed and tray
+- `mb-netwatch diagnose dns` — on-demand extended DNS diagnostic with verdict (see [docs/diagnostics.md](docs/diagnostics.md))
 - `mb-netwatch raycast install` — install Raycast Script Commands (see [docs/raycast.md](docs/raycast.md))
 
 ## Architecture
@@ -32,11 +33,16 @@ General CLI application architecture patterns are described in [docs/cli-archite
 
 ### Core (`core/`)
 
-Central application layer. Holds database, business logic, and probe implementations. Consumers never import from `core/` directly — they receive a `Core` instance and access everything through it:
+Central application layer. Holds database, business logic, probe implementations, and on-demand diagnostics. Consumers never import from `core/` directly — they receive a `Core` instance and access everything through it:
 
 - `core.db` — database (reads and writes)
 - `core.config` — application configuration
 - `core.service` — business logic (running probes, storing results)
+
+Two distinct kinds of network checks live under `core/`:
+
+- **`core/probes/`** — small, lightweight measurements run continuously by `probed` and stored to SQLite. Each probe is a single round-trip with no retries, by design. Results drive the tray icon, the TUI dashboard, and historical sparklines. See [docs/probes.md](docs/probes.md).
+- **`core/diagnostics/`** — heavier, on-demand checks invoked by hand when something looks broken. They may run multiple transports in parallel, query external comparators, and produce an interpreted verdict. Results are returned to the caller and never stored. See [docs/diagnostics.md](docs/diagnostics.md).
 
 ### Consumers
 

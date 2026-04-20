@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
-_CANARY_DOMAIN = "cloudflare.com"
+CANARY_DOMAIN = "cloudflare.com"
 """Fixed A-record canary: short name, DNS-native operator, 300 s TTL."""
 
 _DEFAULT_TIMEOUT = 2.0
@@ -147,7 +147,7 @@ def _parse_scoped_interface_nameservers(lines: list[str]) -> list[str]:
     return nameservers
 
 
-def _get_system_resolvers() -> list[str]:
+def get_system_resolvers() -> list[str]:
     """Return addresses of the system's default DNS resolvers, or [] on any failure."""
     try:
         output = subprocess.check_output(["scutil", "--dns"], text=True, timeout=_SCUTIL_TIMEOUT)  # noqa: S607 — fixed system command, no user input  # nosec B603, B607
@@ -157,23 +157,25 @@ def _get_system_resolvers() -> list[str]:
     return _parse_scutil_dns(output)
 
 
-async def _query_one(nameserver: str, timeout: float) -> DnsResolverSample:  # noqa: ASYNC109 — forwarded directly to dns.asyncquery.udp which accepts timeout natively
-    """Send `A cloudflare.com` over UDP to *nameserver* and return a sample."""
-    query = dns.message.make_query(_CANARY_DOMAIN, dns.rdatatype.A)
+async def query_one(nameserver: str, timeout: float, *, tcp: bool = False) -> DnsResolverSample:  # noqa: ASYNC109 — forwarded directly to dns.asyncquery.{udp,tcp} which accept timeout natively
+    """Send `A cloudflare.com` to *nameserver* over UDP (default) or TCP and return a sample."""
+    query = dns.message.make_query(CANARY_DOMAIN, dns.rdatatype.A)
+    send = dns.asyncquery.tcp if tcp else dns.asyncquery.udp
+    transport = "tcp" if tcp else "udp"
     start = time.monotonic()
     try:
-        response = await dns.asyncquery.udp(query, nameserver, timeout=timeout)
+        response = await send(query, nameserver, timeout=timeout)
     except dns.exception.Timeout:
-        log.debug("dns: %s timed out", nameserver)
+        log.debug("dns: %s %s timed out", nameserver, transport)
         return DnsResolverSample(address=nameserver, resolve_ms=None, error="timeout")
     except OSError as exc:
-        log.debug("dns: %s network error: %s", nameserver, exc)
+        log.debug("dns: %s %s network error: %s", nameserver, transport, exc)
         return DnsResolverSample(address=nameserver, resolve_ms=None, error="network")
     except dns.exception.DNSException as exc:
-        log.debug("dns: %s malformed response: %s", nameserver, exc)
+        log.debug("dns: %s %s malformed response: %s", nameserver, transport, exc)
         return DnsResolverSample(address=nameserver, resolve_ms=None, error="malformed")
     except Exception as exc:
-        log.warning("dns: %s unexpected error: %s", nameserver, exc)
+        log.warning("dns: %s %s unexpected error: %s", nameserver, transport, exc)
         return DnsResolverSample(address=nameserver, resolve_ms=None, error="other")
 
     elapsed_ms = round((time.monotonic() - start) * 1000, 3)
@@ -182,20 +184,20 @@ async def _query_one(nameserver: str, timeout: float) -> DnsResolverSample:  # n
         # Resolver replied but with a non-success rcode (SERVFAIL/REFUSED/NXDOMAIN/...).
         # The exchange completed, so resolve_ms is meaningful and recorded alongside the error.
         error = dns.rcode.to_text(rcode).lower()
-        log.debug("dns: %s rcode=%s in %.0fms", nameserver, error, elapsed_ms)
+        log.debug("dns: %s %s rcode=%s in %.0fms", nameserver, transport, error, elapsed_ms)
         return DnsResolverSample(address=nameserver, resolve_ms=elapsed_ms, error=error)
 
-    log.debug("dns: %s responded in %.0fms", nameserver, elapsed_ms)
+    log.debug("dns: %s %s responded in %.0fms", nameserver, transport, elapsed_ms)
     return DnsResolverSample(address=nameserver, resolve_ms=elapsed_ms, error=None)
 
 
-async def check_dns(timeout: float = _DEFAULT_TIMEOUT) -> DnsResult:  # noqa: ASYNC109 — forwarded to _query_one → dns.asyncquery.udp
+async def check_dns(timeout: float = _DEFAULT_TIMEOUT) -> DnsResult:  # noqa: ASYNC109 — forwarded to query_one → dns.asyncquery.udp
     """Query every system DNS resolver in parallel for `A cloudflare.com` over UDP."""
-    resolvers = await asyncio.to_thread(_get_system_resolvers)
+    resolvers = await asyncio.to_thread(get_system_resolvers)
     if not resolvers:
         log.warning("dns: no system resolvers found")
         return DnsResult(resolvers=[])
 
-    tasks = [_query_one(addr, timeout) for addr in resolvers]
+    tasks = [query_one(addr, timeout) for addr in resolvers]
     samples = await asyncio.gather(*tasks)
     return DnsResult(resolvers=list(samples))

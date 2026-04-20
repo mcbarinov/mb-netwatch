@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 from mm_clikit import CoreContext, TyperPlus
 
+from mb_netwatch.cli.commands.diagnose.dns import dns as diagnose_dns
 from mb_netwatch.cli.commands.probe import probe
 from mb_netwatch.cli.commands.probed import probed
 from mb_netwatch.cli.commands.raycast.install import install as raycast_install
@@ -46,3 +47,7 @@ app.command()(tray)
 raycast_app = TyperPlus()
 raycast_app.command(name="install")(raycast_install)
 app.add_typer(raycast_app, name="raycast", help="Manage Raycast script commands.")
+
+diagnose_app = TyperPlus()
+diagnose_app.command(name="dns")(diagnose_dns)
+app.add_typer(diagnose_app, name="diagnose", aliases=["d"], help="On-demand diagnostics for troubleshooting.")

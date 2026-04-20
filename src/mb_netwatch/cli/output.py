@@ -4,7 +4,13 @@ from urllib.parse import urlparse
 
 from mm_clikit import DualModeOutput
 from pydantic import BaseModel, ConfigDict
+from rich.console import Group, RenderableType
+from rich.rule import Rule
+from rich.table import Table
+from rich.text import Text
 
+from mb_netwatch.core.diagnostics.dns import DnsDiagnosis
+from mb_netwatch.core.probes.dns import DnsResolverSample
 from mb_netwatch.core.service import ProbeResult
 
 
@@ -26,6 +32,46 @@ class RaycastInstallResult(BaseModel):
     installed: list[str]  # Names of installed script files
     refreshed: bool  # True if the directory already contained scripts (re-install)
     command: str  # Resolved command prefix baked into the scripts
+
+
+# Cheat-sheet for common DNS fixes on macOS. Order = recommended escalation.
+# Listed at the bottom of `diagnose dns` output for recall.
+_DNS_FIX_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "Flush DNS cache (try this first):",
+        ("sudo dscacheutil -flushcache", "sudo killall -HUP mDNSResponder"),
+    ),
+    (
+        "Hard restart of mDNSResponder (if flush did not help):",
+        ("sudo launchctl kickstart -k system/com.apple.mDNSResponder",),
+    ),
+)
+
+
+def _build_dns_fix_panel() -> Group:
+    """Render the static cheat-sheet of useful DNS-fix commands."""
+    items: list[RenderableType] = [Rule(title="Useful DNS commands", style="dim")]
+    for label, commands in _DNS_FIX_COMMANDS:
+        items.append(Text(label, style="bold"))
+        items.extend(Text(f"  {cmd}", style="cyan") for cmd in commands)
+        items.append(Text(""))
+    return Group(*items)
+
+
+def _build_resolver_table(title: str, samples: list[DnsResolverSample]) -> Table:
+    """Render a single category of DNS samples as a Rich table."""
+    table = Table(title=title, title_justify="left")
+    table.add_column("Resolver")
+    table.add_column("Time", justify="right")
+    table.add_column("Status")
+    if not samples:
+        table.add_row("—", "—", "no resolvers")
+        return table
+    for s in samples:
+        time_cell = f"{s.resolve_ms:.0f} ms" if s.resolve_ms is not None else "—"
+        status_cell = "ok" if s.error is None else s.error
+        table.add_row(s.address, time_cell, status_cell)
+    return table
 
 
 class Output(DualModeOutput):
@@ -85,6 +131,24 @@ class Output(DualModeOutput):
     def print_start_stop(self, result: StartStopResult) -> None:
         """Print start/stop command result."""
         self.output(json_data=result.model_dump(), display_data=result.message)
+
+    def print_dns_diagnosis(self, diagnosis: DnsDiagnosis) -> None:
+        """Print extended DNS diagnostic — three result tables plus a verdict line."""
+        renderables: list[RenderableType] = [
+            _build_resolver_table("System resolvers (UDP)", diagnosis.system_udp),
+            _build_resolver_table("System resolvers (TCP)", diagnosis.system_tcp),
+            _build_resolver_table("Public DNS (UDP)", diagnosis.public_udp),
+        ]
+        if diagnosis.verdict is not None:
+            # Color verdict by severity: HEALTHY → green, NO_RESOLVERS / problem codes → yellow.
+            color = "green" if diagnosis.verdict.code == "HEALTHY" else "yellow"
+            renderables.append(Text(f"Verdict: {diagnosis.verdict.message}", style=color))
+        else:
+            renderables.append(Text("Verdict: mixed results — see tables above.", style="dim"))
+
+        renderables.append(_build_dns_fix_panel())
+
+        self.output(json_data=diagnosis.model_dump(), display_data=Group(*renderables))
 
     def print_raycast_installed(self, result: RaycastInstallResult) -> None:
         """Print Raycast install confirmation."""
